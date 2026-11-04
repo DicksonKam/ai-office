@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Office</title>
+<meta name="description" content="A cozy 3D office where your running Claude Code, Codex, Cursor and Gemini CLI agents work as chibi teammates, and raise a hand when one is waiting on you.">
+<meta name="theme-color" content="#faf5ee">
+<meta name="application-name" content="AI Office">
+<meta name="apple-mobile-web-app-title" content="AI Office">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="icon" href="/app/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/app/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/app/apple-touch-icon.png" sizes="180x180">
+<link href="fonts/mplus.css" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="sky"><div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div></div>
+<canvas id="scene"></canvas>
+<div id="overlay"></div>
+
+<header id="hud">
+  <div class="title">
+    <span class="logo">🏢</span>
+    <div>
+      <h1>AI Office</h1>
+      <div class="sub"><span id="clock">--:--</span> · <span id="count">waking up…</span></div>
+    </div>
+  </div>
+  <div class="legend">
+    <span id="floors" class="floors" hidden></span>
+    <span class="keywrap">
+      <button class="pill key" id="keyToggle" aria-expanded="false" aria-controls="keyPop" title="what the tags and bubbles mean">Key</button>
+      <div class="keypop" id="keyPop" hidden>
+        <div class="sec">
+          <h3>Name tags</h3>
+          <div class="kr"><span class="sw"><i style="background:var(--claude)"></i><i style="background:var(--codex)"></i><i style="background:var(--cursor)"></i><i style="background:var(--gemini)"></i></span><span>dot: Claude · Codex · Cursor · Gemini</span></div>
+          <div class="kr"><span class="sw"><span class="chip" style="background:#f6c35a;color:#4a3200">★ LEAD</span></span><span>runs a team</span></div>
+          <div class="kr"><span class="sw"><span class="chip" style="background:#e8743b">↳ Mochi</span></span><span>helper in Mochi's team (chip in the lead's colour)</span></div>
+          <div class="kr"><span class="sw"><span class="chip" style="background:#46627f">✓ for Mochi</span></span><span>reviewing Mochi's work</span></div>
+          <div class="kr"><span class="sw"><i style="background:#67c88b"></i><i style="background:#b9b3c4"></i><i style="background:#e2b35d"></i></span><span>working · on a break · waiting on you</span></div>
+        </div>
+        <div class="sec">
+          <h3>Bubbles</h3>
+          <div class="kr"><span class="sw"><span class="b">⌨️ Edit</span><span class="b think">hmm</span></span><span>real agent activity</span></div>
+          <div class="kr"><span class="sw"><span class="b event">📨 To Mochi</span></span><span>between agents</span></div>
+          <div class="kr"><span class="sw"><span class="b ask">🙋 ok?</span></span><span>waiting on you</span></div>
+          <div class="kr"><span class="sw"><span class="b done">✅ Done</span></span><span>finished · your turn</span></div>
+          <div class="kr"><span class="sw"><span class="b ask agent">🙋 Sora's OK?</span></span><span>asking the agent that gave it the work (not you, unless it waits 3 min)</span></div>
+          <div class="kr"><span class="sw"><span class="b event weak">📨 To Mochi<i class="q">?</i></span></span><span>a link seen only in a shared file (grey) · "?": inferred from timing or an echo</span></div>
+          <div class="kr"><span class="sw"><span class="b event">▶ started by panel.py</span></span><span>started by a process, or a party outside the office, named as recorded</span></div>
+          <div class="kr"><span class="sw"><span class="b ambient">coffee</span></span><span>office life, never agent talk</span></div>
+        </div>
+        <div class="sec">
+          <h3>Threads on the floor</h3>
+          <div class="kr"><span class="sw"><i class="ln"></i></span><span>solid: a spawn, a brief or a record naming both (declared · structural)</span></div>
+          <div class="kr"><span class="sw"><i class="ln dashed"></i></span><span>dashed: both touched the same file (artifact)</span></div>
+          <div class="kr"><span class="sw"><i class="ln dotted"></i></span><span>dotted: inferred from timing or an echo · a hint, never a walk</span></div>
+        </div>
+      </div>
+    </span>
+    <button class="pill toggle" id="zoomToggle" aria-pressed="false" title="auto-frame the people in the office (double-click the scene to toggle)">Auto-zoom</button>
+    <button class="pill toggle" id="rosterToggle" aria-pressed="false" title="show the team roster">Teams</button>
+    <button class="pill toggle" id="logToggle" aria-pressed="false" title="what happened recently">Log</button>
+    <!-- overflow: when the row would not fit, main.js moves Key, Auto-zoom, Teams and Log (the same elements) in here -->
+    <span class="morewrap" id="moreWrap" hidden>
+      <button type="button" class="pill more" id="moreToggle" aria-haspopup="true" aria-expanded="false" aria-controls="morePop" aria-label="more controls" title="more controls">⋯</button>
+      <div class="keypop morepop" id="morePop" role="group" aria-label="more controls" hidden></div>
+    </span>
+    <button class="pill toggle" id="todayToggle" hidden aria-expanded="false" title="today's timeline: who worked, took a break or waited on you, and when">Today</button>
+    <span class="bellwrap">
+      <span class="pill bell" id="bell">
+        <button type="button" class="bellbtn" id="bellToggle" aria-pressed="false" title="alerts are off: click to get a notification when an agent starts waiting on you">
+          <svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2c-2.3 0-3.9 1.8-3.9 4v2.4L2.9 10.9c-.2.4.1.8.5.8h9.2c.4 0 .7-.4.5-.8l-1.2-2.3V6.2c0-2.2-1.6-4-3.9-4z"/><path class="cl" d="M6.4 13.1a1.7 1.7 0 0 0 3.2 0"/><path class="sl" d="M2.6 2.4l10.8 11.2"/></svg>
+          <span class="lbl" id="bellLabel">Alerts</span>
+        </button>
+        <button type="button" class="bellmore" id="bellMore" aria-expanded="false" aria-controls="bellPop" aria-label="alert options" title="alert options">▾</button>
+      </span>
+      <div class="keypop bellpop" id="bellPop" hidden>
+        <div class="sec">
+          <h3>Alerts</h3>
+          <p class="note" id="bellNote">Off. Turn on to get a notification when an agent starts waiting on you.</p>
+          <label class="chk"><input type="checkbox" id="chimeToggle"><span>Soft chime with each alert</span></label>
+          <button type="button" class="mini" id="bellTest">Send a test alert</button>
+        </div>
+      </div>
+    </span>
+    <span class="pill conn" id="conn" title="connection to the office server: live"><span class="cd" aria-hidden="true">●</span><span class="lbl">live</span></span>
+  </div>
+</header>
+
+<aside id="roster">
+  <h2>Teams <span id="rosterCount"></span></h2>
+  <div id="rosterBody"></div>
+  <div id="rosterNext" hidden></div>
+  <p class="hint">Solid bubbles reflect what the agents are really doing (transcripts, messages, reports, reviews). Grey bubbles are just office life.</p>
+</aside>
+
+<aside id="log">
+  <h2>Office log <span class="sub">real events only</span></h2>
+  <div id="logBody"></div>
+</aside>
+
+<!-- the worker card (main.js showCard / refreshCard): Tab / Shift+Tab with nothing focused walks through the people on
+     the floor, Esc closes it -->
+<aside id="card" hidden aria-label="agent details">
+  <button class="close" id="cardClose" aria-label="close">×</button>
+  <div class="who"><span class="avatar" id="cardDot"></span><div class="whotext"><div class="name" id="cardName">—</div><div class="host" id="cardHost">—</div></div></div>
+  <section class="day" id="cardDay" hidden>
+    <div class="lab">Today</div>
+    <div class="strip" id="cardStrip" role="img" aria-label="today"></div>
+    <div class="axis" aria-hidden="true"><span id="cardDayFrom"></span><span>now</span></div>
+    <div class="daymeta" id="cardDayMeta"></div>
+  </section>
+  <dl>
+    <dt>Task</dt><dd id="cardTask">—</dd>
+    <dt>Status</dt><dd id="cardStatus">—</dd>
+    <dt>In office</dt><dd id="cardSince">—</dd>
+    <dt>Project</dt><dd id="cardProject">—</dd>
+    <dt>Model</dt><dd id="cardModel">—</dd>
+    <dt>Team</dt><dd><span id="cardTeam">—</span><span class="mates" id="cardMates"></span></dd>
+    <dt id="cardThoughtDt">In their head</dt><dd id="cardThought">—</dd>
+  </dl>
+  <!-- work going on outside the turn: background runs, a timer, schedules -->
+  <section class="recent jobs" id="cardJobsWrap" hidden>
+    <div class="lab">Going on without them</div>
+    <ol id="cardJobs"></ol>
+  </section>
+  <section class="recent" id="cardRecentWrap" hidden>
+    <div class="lab">Recent</div>
+    <ol id="cardRecent"></ol>
+  </section>
+  <!-- links with other agents today: channel chip and a confidence glyph (● declared ◆ structural ◌ artifact ? inferred) -->
+  <section class="msgs" id="cardMsgsWrap" hidden>
+    <div class="lab">Messages <span class="sub">links today · channel · how sure</span></div>
+    <ol id="cardMsgs"></ol>
+  </section>
+</aside>
+
+<div id="empty" hidden>
+  <div class="note">The office is quiet. Start a Claude Code, Codex, Cursor or Gemini CLI session and someone will walk in.</div>
+</div>
+
+<script type="module" src="/main.js"></script>
+</body>
+</html>

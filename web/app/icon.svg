@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>AI Office</title>
+<defs><clipPath id="c-tile"><rect x="24" y="24" width="464" height="464" rx="104"/></clipPath><linearGradient id="g0" x1="0" y1="24" x2="0" y2="488" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#cfe6ff"/><stop offset="1" stop-color="#fbe9ef"/></linearGradient><clipPath id="c-body"><rect x="133" y="177" width="246" height="212" rx="14"/></clipPath><clipPath id="c-roof"><rect x="115" y="149" width="282" height="30" rx="11"/></clipPath><clipPath id="c-lit"><rect x="163" y="209" width="74" height="60" rx="7"/></clipPath></defs>
+<rect x="24" y="24" width="464" height="464" rx="104" fill="url(#g0)"/>
+<circle cx="384" cy="100" r="30" fill="#ffdb94" clip-path="url(#c-tile)"/>
+<circle cx="128" cy="104" r="20" fill="#ffffff" fill-opacity="0.92" clip-path="url(#c-tile)"/>
+<circle cx="156" cy="90" r="29" fill="#ffffff" fill-opacity="0.92" clip-path="url(#c-tile)"/>
+<circle cx="188" cy="106" r="19" fill="#ffffff" fill-opacity="0.92" clip-path="url(#c-tile)"/>
+<rect x="102" y="100" width="106" height="25" rx="12.5" fill="#ffffff" fill-opacity="0.92" clip-path="url(#c-tile)"/>
+<rect x="-40" y="380" width="592" height="200" fill="#b3cda3" clip-path="url(#c-tile)"/>
+<rect x="234" y="384" width="44" height="200" fill="#eedfc4" clip-path="url(#c-tile)"/>
+<g>
+<rect x="116" y="388" width="280" height="18" rx="9" fill="#98b98a" fill-opacity="0.85"/>
+<rect x="124" y="168" width="264" height="230" rx="22" fill="#3f3a4a"/>
+<rect x="133" y="177" width="246" height="212" rx="14" fill="#faf5ee"/>
+<rect x="120" y="350" width="272" height="60" fill="#dfe6d6" clip-path="url(#c-body)"/>
+<rect x="106" y="140" width="300" height="48" rx="18" fill="#3f3a4a"/>
+<rect x="115" y="149" width="282" height="30" rx="11" fill="#cf8466"/>
+<rect x="115" y="149" width="282" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.22" clip-path="url(#c-roof)"/>
+<rect x="156" y="202" width="88" height="74" rx="12" fill="#3f3a4a"/>
+<rect x="163" y="209" width="74" height="60" rx="7" fill="#ffd27a"/>
+<circle cx="200" cy="233.07999999999998" r="36.96" fill="#ffe9b5" fill-opacity="0.75" clip-path="url(#c-lit)"/>
+<rect x="176" y="250" width="48" height="40" rx="18" fill="#e8743b" clip-path="url(#c-lit)"/>
+<circle cx="200" cy="238" r="17" fill="#e8743b" clip-path="url(#c-lit)"/>
+<circle cx="194" cy="232" r="4.5" fill="#ffffff" fill-opacity="0.55" clip-path="url(#c-lit)"/>
+<rect x="268" y="202" width="88" height="74" rx="12" fill="#3f3a4a"/>
+<rect x="275" y="209" width="74" height="60" rx="7" fill="#cfe1ec"/>
+<rect x="282" y="215" width="12" height="12" rx="6" fill="#ffffff" fill-opacity="0.85"/>
+<rect x="156" y="300" width="56" height="54" rx="12" fill="#3f3a4a"/>
+<rect x="163" y="307" width="42" height="40" rx="7" fill="#cfe1ec"/>
+<rect x="170" y="313" width="12" height="12" rx="6" fill="#ffffff" fill-opacity="0.85"/>
+<rect x="300" y="300" width="56" height="54" rx="12" fill="#3f3a4a"/>
+<rect x="307" y="307" width="42" height="40" rx="7" fill="#cfe1ec"/>
+<rect x="314" y="313" width="12" height="12" rx="6" fill="#ffffff" fill-opacity="0.85"/>
+<rect x="228" y="302" width="56" height="96" rx="12" fill="#3f3a4a"/>
+<rect x="236" y="310" width="40" height="80" rx="7" fill="#d6b993"/>
+<circle cx="267" cy="352" r="5" fill="#e2b35d"/>
+<rect x="214" y="286" width="84" height="22" rx="11" fill="#3f3a4a"/>
+<rect x="221" y="292" width="70" height="10" rx="5" fill="#e2b35d"/>
+<circle cx="116" cy="380" r="32" fill="#3f3a4a"/>
+<circle cx="146" cy="392" r="25" fill="#3f3a4a"/>
+<circle cx="398" cy="382" r="30" fill="#3f3a4a"/>
+<circle cx="370" cy="393" r="23" fill="#3f3a4a"/>
+<circle cx="116" cy="380" r="24" fill="#7fb173"/>
+<circle cx="146" cy="392" r="17" fill="#7fb173"/>
+<circle cx="398" cy="382" r="22" fill="#7fb173"/>
+<circle cx="370" cy="393" r="15" fill="#7fb173"/>
+<circle cx="108.8" cy="371.6" r="9.120000000000001" fill="#ffffff" fill-opacity="0.18"/>
+<circle cx="140.9" cy="386.05" r="6.46" fill="#ffffff" fill-opacity="0.18"/>
+<circle cx="391.4" cy="374.3" r="8.36" fill="#ffffff" fill-opacity="0.18"/>
+<circle cx="365.5" cy="387.75" r="5.7" fill="#ffffff" fill-opacity="0.18"/>
+</g>
+</svg>

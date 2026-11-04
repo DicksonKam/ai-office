@@ -1,0 +1,610 @@
+:root {
+  --font: "M PLUS Rounded 1c", ui-rounded, "Hiragino Maru Gothic ProN", "SF Pro Rounded", system-ui, sans-serif;
+  --ink: #3b3346;
+  --ink-soft: #7a7186;
+  --paper: rgba(255, 253, 250, 0.92);
+  --claude: #e8743b;
+  --codex: #35a08e;
+  --cursor: #4a4e57;
+  --gemini: #3f51e0;
+  --sky-top: #cfe6ff;
+  --sky-bottom: #fbe9ef;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; font-family: var(--font); color: var(--ink); }
+body { background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom)); transition: background 2s; }
+
+#sky { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.cloud { position: absolute; width: 220px; height: 70px; background: rgba(255,255,255,0.75); border-radius: 60px; filter: blur(1px); opacity: .9;
+  animation: drift linear infinite; }
+.cloud::before, .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+.cloud::before { width: 90px; height: 90px; left: 35px; top: -40px; }
+.cloud::after { width: 120px; height: 110px; left: 95px; top: -55px; }
+.c1 { top: 8%; left: -260px; animation-duration: 140s; }
+.c2 { top: 20%; left: -300px; transform: scale(.7); animation-duration: 190s; animation-delay: -60s; }
+.c3 { top: 4%; left: -240px; transform: scale(.5); animation-duration: 230s; animation-delay: -120s; }
+@keyframes drift { from { transform: translateX(0) scale(var(--s, 1)); } to { transform: translateX(calc(100vw + 400px)) scale(var(--s, 1)); } }
+.c2 { --s: .7 } .c3 { --s: .5 }
+
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; transition: filter .6s; }
+/* stacking, bottom to top: scene < overlay (tags, bubbles; its own z-indexes stay inside it) < panels < HUD and its popovers */
+#overlay { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+
+/* name tags & thought bubbles */
+.tag { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px;
+  background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700; letter-spacing: .01em;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 6px 16px rgba(80,60,120,.12); border: 1.5px solid rgba(255,255,255,.9);
+  transition: opacity .3s; }
+.tag:hover { background: #fff; }
+.tag .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #888); box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+.tag .proj { color: var(--ink-soft); font-weight: 500; }
+.tag.small { font-size: 11px; padding: 2px 8px 2px 6px; }
+.tag .jb { padding: 0 6px; border-radius: 8px; background: #dff4f8; color: #1f6f80; font-weight: 700; font-size: .9em; font-variant-numeric: tabular-nums; }
+.tag .jb.bad { background: #fbe3de; color: #a83a26; }
+.tag .st { width: 7px; height: 7px; border-radius: 50%; background: #c9c4d2; }
+.tag.working .st { background: #67c88b; box-shadow: 0 0 0 3px rgba(103,200,139,.25); }
+.tag.idle .st { background: #b9b3c4; }
+.tag.asking .st { background: #e2b35d; box-shadow: 0 0 0 2px rgba(226,179,93,.35); animation: askpulse 1.4s ease-in-out infinite; }
+@keyframes askpulse { 0%,100% { box-shadow: 0 0 0 2px rgba(226,179,93,.4);} 50% { box-shadow: 0 0 0 5px rgba(226,179,93,.1);} }
+/* no room for the tag: just the coloured dot, the full tag on hover */
+.tag.faded:not(:hover) { padding: 3px; gap: 0; }
+.tag.faded:not(:hover) > :not(.dot) { display: none; }
+.tag [hidden] { display: none !important; }
+
+.bubble { position: absolute; transform: translate(-50%, -100%); width: max-content; max-width: 220px; padding: 7px 11px; border-radius: 16px;
+  background: #fff; color: var(--ink); font-size: 12.5px; line-height: 1.3; font-weight: 500;
+  box-shadow: 0 3px 0 rgba(90,70,110,.10), 0 10px 24px rgba(80,60,120,.16); border: 2px solid var(--c, #ddd);
+  opacity: 0; transition: opacity .35s, transform .35s; pointer-events: none; }
+.bubble::after { content: ""; position: absolute; left: var(--tail, 50%); bottom: -9px; width: 12px; height: 12px; background: #fff;
+  border-right: 2px solid var(--c, #ddd); border-bottom: 2px solid var(--c, #ddd); transform: translateX(-50%) rotate(45deg); }
+.bubble.show { opacity: 1; }
+.bubble.pop { animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pop { 0% { transform: translate(-50%, -100%) scale(.6); } 100% { transform: translate(-50%, -100%) scale(1); } }
+.bubble .k { margin-right: 5px; }
+.bubble.think { background: color-mix(in srgb, var(--c, #ddd) 8%, #fff); font-style: italic; }
+.bubble.think::after { background: color-mix(in srgb, var(--c, #ddd) 8%, #fff); }
+.bubble.dots { padding: 5px 10px; font-size: 14px; letter-spacing: 2px; border-radius: 14px; }
+.bubble.dots .dots span { display: inline-block; animation: bob 1.2s infinite; }
+.bubble.dots .dots span:nth-child(2) { animation-delay: .15s; } .bubble.dots .dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes bob { 0%,60%,100% { transform: translateY(0);} 30% { transform: translateY(-3px);} }
+
+/* HUD */
+#hud { position: fixed; z-index: 30; top: 14px; left: 18px; right: 18px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; }
+#hud .title { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; background: var(--paper); border-radius: 18px; padding: 8px 16px 8px 12px;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 8px 24px rgba(80,60,120,.12); border: 1.5px solid #fff; pointer-events: auto; }
+#hud .logo { font-size: 26px; }
+#hud h1 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .02em; }
+#hud .sub { font-size: 12px; color: var(--ink-soft); font-weight: 500; white-space: nowrap; }
+/* the pill row never wraps: main.js + hudfit.js fold, compact or move it (see "responsive HUD" below) */
+.legend { position: relative; flex: none; display: flex; gap: 8px; pointer-events: auto; flex-wrap: nowrap; justify-content: flex-end; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap;
+  background: var(--paper); border: 1.5px solid #fff; box-shadow: 0 2px 0 rgba(90,70,110,.1), 0 6px 16px rgba(80,60,120,.1); }
+.keywrap { position: relative; display: inline-flex; }
+.pill.key { cursor: pointer; font-family: inherit; color: var(--ink); }
+.pill.key.on { background: #fff3d6; border-color: #f0b23a; }
+.keypop { position: absolute; right: 0; top: calc(100% + 8px); width: 300px; max-width: calc(100vw - 36px); z-index: 200000;
+  background: var(--paper); border-radius: 16px; padding: 12px 14px; border: 1.5px solid #fff; font-size: 12px; line-height: 1.35;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 12px 32px rgba(80,60,120,.18); }
+.keypop[hidden] { display: none; }
+.keypop h3 { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft); }
+.keypop h3 + * { margin-top: 0; }
+.keypop .sec + .sec { margin-top: 10px; padding-top: 9px; border-top: 1px dashed #e4dfe9; }
+.keypop .kr { display: grid; grid-template-columns: 108px 1fr; gap: 8px; align-items: center; padding: 2px 0; }
+.keypop .kr > span:last-child { color: var(--ink-soft); }
+.keypop .sw { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.keypop .sw i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.keypop .chip { font-size: 10px; font-weight: 800; color: #fff; padding: 0 5px; border-radius: 999px; }
+.keypop .b { display: inline-block; padding: 1px 7px; border-radius: 10px; border: 1.5px solid #e8743b; background: #fff; font-weight: 600; font-size: 11px; }
+.keypop .b.think { font-style: italic; background: color-mix(in srgb, #e8743b 8%, #fff); }
+.keypop .b.event { background: #fff8ea; border-color: #f0b23a; color: #4b3b1e; }
+.keypop .b.ask { background: #3f3a4a; border-color: #e2b35d; color: #fff8ea; font-weight: 700; }
+.keypop .b.ask.agent { background: #fbf8f1; border-color: #8f86a3; color: #3f3a4a; }
+.keypop .b.ambient { background: rgba(236,236,240,.92); border-style: dashed; border-color: #c6c2cf; color: #8a8496; font-weight: 500; }
+.pill.toggle { cursor: pointer; font-family: inherit; color: var(--ink); } .pill.toggle.on { background: #fff3d6; border-color: #f0b23a; }
+
+.pill.conn { color: #4caf74; gap: 4px; } .pill.conn.off { color: #d9534f; }
+
+/* detail card */
+#card { position: fixed; z-index: 10; left: 18px; bottom: 18px; width: 300px; background: var(--paper); border-radius: 18px; padding: 14px 16px 12px;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 12px 32px rgba(80,60,120,.18); border: 1.5px solid #fff; font-size: 13px; }
+#card .close { position: absolute; right: 8px; top: 6px; border: 0; background: transparent; font-size: 18px; cursor: pointer; color: var(--ink-soft); }
+#card .who { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+#card .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--c, #aaa); box-shadow: inset 0 -6px 0 rgba(0,0,0,.08); }
+#card .name { font-weight: 800; font-size: 15px; } #card .host { color: var(--ink-soft); font-size: 12px; }
+#card dl { display: grid; grid-template-columns: 78px 1fr; gap: 4px 8px; margin: 0; }
+#card dt { color: var(--ink-soft); font-weight: 600; } #card dd { margin: 0; word-break: break-word; }
+/* card v2: the day strip, team chips and recent actions; the card stays paper by night too */
+#card { width: min(320px, calc(100vw - 36px)); overscroll-behavior: contain; scrollbar-width: thin; }
+#card [hidden] { display: none !important; }
+#card .who { padding-right: 18px; }
+#card .whotext { min-width: 0; }
+#card .avatar { flex: none; }
+#card .close { line-height: 1; padding: 2px 6px; border-radius: 999px; }
+#card .close:hover { color: var(--ink); background: rgba(236,232,240,.75); }
+#card .close:focus-visible, #card .mate:focus-visible { outline: 2px solid #f0b23a; outline-offset: 1px; }
+#card .lab { color: var(--ink-soft); font-weight: 600; margin-bottom: 4px; }
+#card .day { margin: 0 0 10px; }
+#card .strip { position: relative; height: 10px; border-radius: 999px; background: rgba(90,70,110,.07); --c: #9aa0b0; }
+#card .cs { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+#card .cs.work { background: var(--c); }
+#card .cs.idle { background: #e1dce7; }
+#card .cs.ask { z-index: 1; min-width: 3px; background: #3f3a4a; box-shadow: inset 0 0 0 1.5px #e2b35d; }
+#card .cs.s0 { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+#card .cs.s1 { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+#card .cm { position: absolute; top: 50%; z-index: 2; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; box-sizing: border-box;
+  background: #fff; border: 1.5px solid var(--m); box-shadow: 0 1px 2px rgba(60,40,90,.16); }
+#card .cm.rep { --m: #6f9a6c; }
+#card .cm.spawn { --m: #7457c0; }
+#card .cm.ok, #card .cm.flag { border-radius: 2px; transform: rotate(-8deg); } /* a stamp, as in the Today drawer */
+#card .cm.ok { --m: #46627f; }
+#card .cm.flag { --m: #b5705a; }
+#card .axis { display: flex; justify-content: space-between; margin-top: 2px; font-size: 9.5px; font-weight: 600; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; }
+#card .daymeta { margin-top: 1px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+#card .daymeta b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+#card .mates { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+#card .mates:empty { display: none; }
+#card .mate { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; margin: 0; padding: 2px 9px 2px 6px; border-radius: 999px;
+  border: 1px solid #e3dde9; border-color: color-mix(in srgb, var(--c) 42%, #fff); background: #fff; background: color-mix(in srgb, var(--c) 12%, #fff);
+  color: var(--ink); font: inherit; font-size: 11.5px; font-weight: 700; line-height: 1.45; cursor: pointer; }
+#card .mate:hover { background: color-mix(in srgb, var(--c) 22%, #fff); }
+#card .mate .sd { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--s, #b9b3c4); box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
+#card .mate .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#card .mate.more { cursor: default; background: transparent; border: 1px dashed #d6d0dd; color: var(--ink-soft); padding: 2px 8px; }
+#card .recent { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ece8f0; }
+#card .recent ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+#card .recent li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 6px; align-items: baseline; font-size: 12px; line-height: 1.35; }
+#card .recent .i { text-align: center; font-size: 11px; }
+#card .recent .x { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; word-break: break-word; }
+#card .recent .k-think .x { color: #5d5468; }
+#card .recent .k-ask .x { font-weight: 700; }
+#card .recent .k-error .x { color: #9a5a4a; }
+#card .recent time { color: var(--ink-soft); font-size: 10.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+#empty { position: fixed; z-index: 5; left: 50%; bottom: 36px; transform: translateX(-50%); pointer-events: none; }
+#empty .note { background: var(--paper); border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 8px 24px rgba(80,60,120,.12); border: 1.5px solid #fff; }
+
+/* role chips on tags */
+.tag .role { font-size: 10.5px; font-weight: 800; letter-spacing: .02em; color: #fff; background: #6b7186; padding: 1px 6px; border-radius: 999px; }
+.tag .role.r-lead { color: #4a3200; background: #f6c35a; text-transform: uppercase; }
+.tag .role.r-helper { background: #7457c0; }
+/* reviewer: dark steel slate (like the reviewer's suit), well clear of Gemini's royal blue #3f51e0; white text 6.3:1 */
+.tag .role.r-reviewer { background: #46627f; }
+
+/* event bubbles: real agent interactions */
+.bubble.event { background: #fff8ea; border-color: #f0b23a; color: #4b3b1e; font-weight: 600; }
+.bubble.event::after { background: #fff8ea; border-color: #f0b23a; }
+.bubble.error { background: #fff0f0; border-color: #e88989; }
+/* blocked on the user: the one bubble that asks you to act, so it reads first: dark ink with a mustard edge */
+.bubble.ask { background: #3f3a4a; border-color: #e2b35d; color: #fff8ea; font-weight: 700; }
+.bubble.ask::after { background: #3f3a4a; border-color: #e2b35d; }
+/* an ask addressed to the agent that gave the work (not to you): paper with an ink edge, no mustard; it still shows
+   first above that person, but it never points from the screen edge or rings */
+.bubble.ask.agent { background: #fbf8f1; border-color: #8f86a3; color: #3f3a4a; font-weight: 700; }
+.bubble.ask.agent::after { background: #fbf8f1; border-color: #8f86a3; }
+#count .ask { font: inherit; font-weight: 800; color: #fff8ea; background: #3f3a4a; border: 1.5px solid #e2b35d; border-radius: 999px;
+  padding: 0 8px; margin-right: 6px; cursor: pointer; line-height: 1.5; }
+#count .ask:hover { background: #4d4759; }
+#count .ready { font: inherit; font-weight: 800; color: #2f4a2e; background: #f1f6ee; border: 1.5px solid #6f9a6c; border-radius: 999px; padding: 1px 8px; margin-right: 6px; cursor: pointer; }
+#count .ready:hover { background: #e4eedd; }
+/* an ask from someone out of view: a chip on the screen edge pointing toward them */
+.edge { position: absolute; transform: translate(-50%, -50%); display: none; align-items: center; gap: 5px; padding: 3px 9px 3px 6px;
+  font: inherit; font-size: 11.5px; font-weight: 700; white-space: nowrap; color: #fff8ea; background: #3f3a4a; border: 1.5px solid #e2b35d;
+  border-radius: 999px; box-shadow: 0 3px 0 rgba(90,70,110,.12), 0 8px 20px rgba(60,40,90,.22); pointer-events: auto; cursor: pointer; z-index: 99000; }
+.edge.show { display: inline-flex; }
+.edge .ar { display: inline-block; color: #e2b35d; font-size: 11px; }
+.bubble.error::after { background: #fff0f0; border-color: #e88989; }
+/* ambient bubbles: invented office life, visibly different */
+.bubble.ambient { background: rgba(236,236,240,.92); border: 1.5px dashed #c6c2cf; color: #8a8496; font-weight: 500; font-style: normal; padding: 5px 10px; border-radius: 14px; }
+.bubble.ambient::after { background: rgba(236,236,240,.92); border-right: 1.5px dashed #c6c2cf; border-bottom: 1.5px dashed #c6c2cf; }
+
+/* emotion marks */
+.mark { position: absolute; transform: translate(-50%, -100%); font-size: 20px; font-weight: 900; color: #e8743b; text-shadow: 0 2px 0 #fff, 0 0 6px #fff; opacity: 0; transition: opacity .25s; pointer-events: none; }
+.mark.show { opacity: 1; animation: markfloat 2.2s ease-out forwards; }
+.mark.pop { animation: markpop .4s cubic-bezier(.2,1.8,.4,1), markfloat 2.2s ease-out forwards; }
+@keyframes markfloat { 0% { margin-top: 0; opacity: 1; } 70% { opacity: 1; } 100% { margin-top: -18px; opacity: 0; } }
+@keyframes markpop { 0% { transform: translate(-50%, -100%) scale(.3); } 100% { transform: translate(-50%, -100%) scale(1); } }
+
+/* roster */
+#roster { position: fixed; z-index: 10; right: 18px; top: 64px; width: 260px; max-height: calc(100vh - 120px); overflow: auto; background: var(--paper); border-radius: 18px; padding: 12px 14px 10px;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 12px 32px rgba(80,60,120,.16); border: 1.5px solid #fff; font-size: 12px; display: none; }
+#roster.on { display: block; }
+#roster h2 { margin: 0 0 8px; font-size: 13px; font-weight: 800; letter-spacing: .03em; }
+#roster h2 span { color: var(--ink-soft); font-weight: 600; }
+#roster .team { padding: 6px 0 8px; border-top: 1px dashed #e4dfe9; }
+#roster .team:first-child { border-top: 0; }
+#roster .row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+#roster .row.sub { padding-left: 16px; } #roster .row.sub2 { padding-left: 30px; }
+#roster .row .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, #999); flex: none; }
+#roster .row .st { width: 7px; height: 7px; border-radius: 50%; background: #c9c4d2; flex: none; margin-left: auto; }
+#roster .row.working .st { background: #67c88b; } #roster .row.idle .st { background: #b9b3c4; }
+#roster .row .nm { font-weight: 800; } #roster .row .task { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* someone waiting on you: the row in the ask colours (dark ink, mustard edge) with 🙋 where the status dot was */
+#roster .row.asking { background: #3f3a4a; color: #fff8ea; border-radius: 8px; box-shadow: 0 0 0 1.5px #e2b35d; margin: 2px -5px; padding: 2px 5px; }
+#roster .row.asking.sub { padding-left: 21px; } #roster .row.asking.sub2 { padding-left: 35px; }
+#roster .row.asking .task { color: #e3d9c8; }
+#roster .row.asking .dot { box-shadow: 0 0 0 1.5px rgba(255,248,234,.85); }
+#roster .row.asking .st { width: auto; height: auto; background: none; font-size: 11px; line-height: 1; }
+#roster .row.asking .st::before { content: "🙋"; }
+#roster .row.asking .chip.fl { background: #575166; color: #fff8ea; }
+#roster .row .chip { font-size: 9px; font-weight: 800; color: #fff; background: var(--r, #999); padding: 0 5px; border-radius: 999px; text-transform: uppercase; }
+#roster .chip.jb { background: #dff4f8; color: #1f6f80; text-transform: none; white-space: nowrap; flex: none; }
+#roster .chip.from { background: #eee9f4; color: var(--ink-soft); text-transform: none; white-space: nowrap; flex: none; }
+#roster .chip.jb.bad { background: #fbe3de; color: #a83a26; }
+#rosterNext { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ece8f0; font-size: 11.5px; }
+#rosterNext .lab { font-weight: 800; margin-bottom: 3px; }
+#rosterNext .s { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 7px; line-height: 1.45; }
+#rosterNext .t { font-weight: 800; font-variant-numeric: tabular-nums; color: #1f6f80; }
+#rosterNext .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#card .jobs .k-failed .x { color: #a83a26; font-weight: 700; }
+#card .jobs .k-unknown .x, #card .jobs .k-stopped .x { color: #6f6a7a; }
+#roster .hint { margin: 10px 0 0; font-size: 10.5px; color: var(--ink-soft); line-height: 1.35; }
+
+/* office log */
+#log { position: fixed; z-index: 10; right: 18px; bottom: 18px; width: 300px; max-height: 38vh; overflow: auto; background: var(--paper); border-radius: 18px; padding: 10px 12px 8px;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 12px 32px rgba(80,60,120,.16); border: 1.5px solid #fff; font-size: 11.5px; display: none; }
+#log.on { display: block; }
+#log h2 { margin: 0 0 6px; font-size: 13px; font-weight: 800; letter-spacing: .03em; }
+#log h2 .sub { color: var(--ink-soft); font-weight: 600; font-size: 10.5px; margin-left: 4px; }
+#log .entry { display: grid; grid-template-columns: 38px 18px 1fr; gap: 4px; padding: 3px 0; border-top: 1px dashed #ece8f0; line-height: 1.3; }
+#log .entry:first-child { border-top: 0; }
+#log .entry .t { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#log .entry.event .m { color: #4b3b1e; }
+#log .entry .m b { font-weight: 800; }
+
+.bubble .tx { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* decluttered tags: compact = name + role only (full on hover); lifted = stacked above a busy spot on a thin leader */
+.tag.compact .proj { display: none; }
+.tag.compact:hover .proj { display: inline; }
+.tag.lifted::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: var(--lift, 0); margin-left: -1px;
+  background: var(--c, #888); opacity: .55; border-radius: 1px; pointer-events: none; }
+.tag:hover { z-index: 100000 !important; opacity: 1 !important; }
+
+/* floors */
+.floors { display: inline-flex; gap: 4px; }
+.floors[hidden] { display: none; }
+.pill.floor { position: relative; cursor: pointer; font-family: inherit; color: var(--ink); padding: 5px 9px; }
+.pill.floor.on { background: #fff3d6; border-color: #f0b23a; }
+.pill.floor .n { font-size: 10px; background: #eee9f4; border-radius: 999px; padding: 0 5px; color: #5d5569; }
+.pill.floor .ask { font-size: 10px; background: #3f3a4a; border: 1px solid #e2b35d; color: #fff8ea; border-radius: 999px; padding: 0 5px; font-weight: 800; }
+#roster .chip.fl { background: #eee9f4; color: var(--ink-soft); }
+
+/* reduced motion: no drifting clouds, pops, pulses or bobbing dots */
+@media (prefers-reduced-motion: reduce) {
+  .cloud, .bubble.pop, .mark.show, .mark.pop, .tag.asking .st, .bubble.dots .dots span { animation: none !important; }
+  .bubble { transition: opacity .2s; }
+}
+
+/* alerts bell: one pill, two hit areas (toggle | options menu) */
+.bellwrap { position: relative; display: inline-flex; }
+.pill.bell { padding: 0; gap: 0; overflow: hidden; }
+.pill.bell.on { background: #fff3d6; border-color: #f0b23a; }
+.pill.bell button { font: inherit; color: var(--ink); background: transparent; border: 0; cursor: pointer; display: inline-flex; align-items: center; }
+.pill.bell .bellbtn { gap: 5px; padding: 5px 7px 5px 10px; }
+.pill.bell .bellmore { padding: 5px 9px 5px 6px; font-size: 10px; color: var(--ink-soft); border-left: 1px solid rgba(90,70,110,.14); }
+.pill.bell button:hover { background: rgba(255,255,255,.7); }
+.pill.bell button:focus-visible { outline: 2px solid #f0b23a; outline-offset: -2px; border-radius: 999px; }
+.pill.bell .ic { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.pill.bell .ic .sl { stroke: var(--ink-soft); }
+.pill.bell.on .ic path:first-child { fill: currentColor; }
+.pill.bell.on .ic .sl { display: none; }
+.pill.bell.blocked .bellbtn { color: var(--ink-soft); }
+.bellpop { width: 260px; }
+.bellpop .note { margin: 0 0 9px; color: var(--ink-soft); }
+.bellpop .chk { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-weight: 700; cursor: pointer; }
+.bellpop .chk input { margin: 0; accent-color: #e2b35d; width: 14px; height: 14px; }
+.bellpop .chk.dis { opacity: .5; cursor: default; }
+.bellpop .mini { margin-top: 8px; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--ink); background: #fff; border: 1.5px solid #e4dfe9;
+  border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.bellpop .mini:hover { border-color: #f0b23a; }
+.bellpop .mini:disabled { opacity: .5; cursor: default; }
+
+/* ---- responsive HUD (H1) ----------------------------------------------------------------------------------------
+   main.js measures the pills and web/hudfit.js plans the row; the classes below apply the plan:
+   .legend.fl-compact / .bell-ic / .conn-ic / .scroll, #hud.clamp / #hud.stack, .keywrap.folded, #moreWrap shown.
+   Root variables (px, from main.js): --hud-b bottom of the pill row, --hud-h bottom of the whole HUD,
+   --hud-r what the right-hand panels must clear (the pill row, or the card too when it reaches that far right). */
+#hud { gap: 10px; }
+#hud .title > div { min-width: 0; }
+/* the card clamps beside the pills: the status line ends in an ellipsis */
+#hud.clamp .sub { overflow: hidden; text-overflow: ellipsis; }
+/* last resort: the card on its own line, the pills on one row below it */
+#hud.stack { flex-direction: column; align-items: flex-start; row-gap: 8px; } /* column-gap untouched: the fit reads it */
+#hud.stack .title { max-width: 100%; }
+#hud.stack .legend { max-width: 100%; justify-content: flex-start; }
+/* very narrow: the status line wraps under the title instead of clipping */
+@media (max-width: 519px) {
+  #hud .sub { white-space: normal; }
+  #hud.clamp .sub { overflow: visible; }
+}
+/* tight: floor buttons show "1F" alone (the head count stays in the button's tooltip); a floor with someone waiting on
+   you carries one amber dot ("N waiting" on hover) */
+.fl-compact .pill.floor { padding-left: 8px; padding-right: 10px; }
+.fl-compact .pill.floor .n { display: none; }
+.fl-compact .pill.floor .ask { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; padding: 0;
+  font-size: 0; line-height: 0; border-radius: 50%; overflow: hidden; background: #e2b35d; border: 1.5px solid #fff; }
+/* tighter: the bell without its label, the connection as its dot alone (both keep their title) */
+.bell-ic .pill.bell .lbl { display: none; }
+.bell-ic .pill.bell .bellbtn { padding-left: 9px; padding-right: 6px; }
+.conn-ic .pill.conn { padding-left: 8px; padding-right: 8px; }
+.conn-ic .pill.conn .lbl { display: none; }
+/* tiny screen with many floors: the row scrolls sideways rather than wrapping */
+.legend.scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.legend.scroll::-webkit-scrollbar { display: none; }
+/* the ⋯ overflow pill and its menu (the same popover look as the Key); folded pills keep their pill look and state */
+.morewrap { position: relative; display: inline-flex; }
+.morewrap[hidden] { display: none; }
+.pill.more { position: relative; cursor: pointer; font-family: inherit; color: var(--ink); padding: 5px 10px; font-weight: 800; }
+.pill.more.on { background: #fff3d6; border-color: #f0b23a; }
+.pill.more.lit::after { content: ''; position: absolute; top: 3px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #f0b23a; }
+.morepop { width: auto; min-width: 150px; padding: 8px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.morepop .pill { justify-content: flex-start; padding: 6px 12px; box-shadow: 0 1px 0 rgba(90,70,110,.08); }
+/* the Key button folded into the menu: its popover stays, anchored to the right edge of the row */
+.keywrap.folded { position: absolute; right: 0; top: 0; bottom: 0; width: 0; }
+/* measuring clones (main.js): laid out at their natural width, never seen */
+.hud-measure { position: absolute; left: 0; top: 0; width: max-content; display: flex; flex-direction: column; align-items: flex-start;
+  visibility: hidden; pointer-events: none; z-index: -1; }
+.hud-measure > * { flex: none !important; max-width: none !important; margin: 0 !important; }
+/* touch: every pill is a comfortable target */
+@media (pointer: coarse) {
+  .pill { min-height: 32px; }
+  .pill.floor, .pill.toggle, .pill.key, .pill.more { padding-left: 12px; padding-right: 12px; }
+  .pill.bell { align-items: stretch; }
+  .morepop .pill { min-height: 38px; }
+}
+
+/* panels keep clear of the HUD, however tall it is */
+#roster { top: max(64px, calc(var(--hud-r, 50px) + 10px)); max-height: calc(100vh - max(64px, calc(var(--hud-r, 50px) + 10px)) - 18px); }
+#log { max-height: min(38vh, calc(100vh - var(--hud-r, 50px) - 46px)); }
+#card { max-height: calc(100vh - var(--hud-h, 72px) - 28px); max-height: calc(100dvh - var(--hud-h, 72px) - 28px); overflow: auto; }
+
+/* narrow windows: tighter insets; popovers become sheets under the HUD */
+@media (max-width: 760px) {
+  #hud { left: 12px; right: 12px; top: 10px; gap: 8px; }
+  .legend { gap: 6px; }
+  .keypop { position: fixed; left: 12px; right: 12px; top: calc(var(--hud-h, 100px) + 8px); width: auto; max-width: none; }
+  .keypop.morepop { left: auto; min-width: 170px; }
+  #roster { right: 12px; width: min(260px, calc(100vw - 24px)); }
+  #card { left: 12px; bottom: 12px; width: min(320px, calc(100vw - 24px)); max-height: calc(100dvh - var(--hud-h, 72px) - 22px); }
+}
+
+/* "done, your turn": a top-level session just handed back to you (real working → idle); sage, like its desk flag */
+.bubble.done { background: #f1f6ee; border-color: #6f9a6c; color: #2f4a2e; font-weight: 700; }
+.bubble.done::after { background: #f1f6ee; border-color: #6f9a6c; }
+.keypop .b.done { background: #f1f6ee; border-color: #6f9a6c; color: #2f4a2e; font-weight: 700; }
+
+/* far zoom: ordinary bubbles shrink to a round icon chip in the agent's colour (hover the tag or chip for the text) */
+.bubble.glyph { width: 22px; height: 22px; max-width: none; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11.5px; line-height: 1; font-style: normal; background: #fff; border: 2px solid var(--c, #ddd); color: var(--ink);
+  box-shadow: 0 2px 0 rgba(90,70,110,.10), 0 5px 12px rgba(80,60,120,.16); pointer-events: auto; cursor: default; }
+.bubble.glyph .k { margin: 0; }
+.bubble.glyph::after { width: 7px; height: 7px; bottom: -5px; background: #fff; border-right: 2px solid var(--c, #ddd); border-bottom: 2px solid var(--c, #ddd); }
+.bubble.glyph.think, .bubble.glyph.think::after { background: color-mix(in srgb, var(--c, #ddd) 8%, #fff); }
+.bubble.glyph.event, .bubble.glyph.event::after { background: #fff8ea; }
+.bubble.glyph.done, .bubble.glyph.done::after { background: #f1f6ee; }
+/* office life stays visibly ambient even as a chip: grey, dashed */
+.bubble.glyph.ambient { background: rgba(236,236,240,.95); border: 1.5px dashed #c6c2cf; color: #8a8496; }
+.bubble.glyph.ambient::after { background: rgba(236,236,240,.95); border-right: 1.5px dashed #c6c2cf; border-bottom: 1.5px dashed #c6c2cf; }
+
+/* going away: a quick fade, so a bubble that moves on never lingers as a ghost; then hidden outright (no hover target) */
+.bubble.out { visibility: hidden; pointer-events: none !important; transition: opacity .12s, transform .35s, visibility 0s .12s; }
+.bubble.glyph:not(.show) { pointer-events: none; }
+
+/* someone on another floor (or not yet in the room): invisible AND unclickable, so a tag left at an old spot never
+   catches a click or a hover meant for someone else (bubbles.js sets .gone) */
+.tag.gone, .bubble.gone, .mark.gone, .edge.gone { visibility: hidden; pointer-events: none !important; }
+.tag.gone { transition: opacity .3s, visibility 0s .3s; }
+
+/* lost the connection to the office server: a small banner under the HUD (main.js creates #offline) */
+#offline { position: fixed; z-index: 20; left: 50%; top: max(80px, calc(var(--hud-h, 56px) + 10px)); transform: translateX(-50%);
+  max-width: calc(100vw - 32px); padding: 5px 14px; border-radius: 999px; background: #fff8ea; color: var(--ink); border: 1.5px solid #f0b23a;
+  font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 8px 24px rgba(80,60,120,.14); }
+#offline[hidden] { display: none; }
+/* what is on screen may be out of date (offline): the scene dims a little */
+body.scene-stale #scene { filter: saturate(.55) brightness(.94); }
+
+/* ---- Today timeline (web/timeline.js): a drawer along the bottom, one bar per session ---------------------------- */
+#todayToggle[hidden] { display: none; }
+#timeline { position: fixed; z-index: 12; left: 18px; right: 18px; bottom: 18px; display: flex; flex-direction: column;
+  max-height: min(46vh, 480px, calc(100vh - var(--hud-h, 56px) - 36px)); padding: 10px 12px 8px 14px;
+  background: var(--paper); border-radius: 18px; border: 1.5px solid #fff; font-size: 12px;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 12px 32px rgba(80,60,120,.16); animation: tlup .22s ease-out; }
+#timeline[hidden] { display: none; }
+@keyframes tlup { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+.tl-head { position: relative; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; padding-right: 24px; margin-bottom: 6px; }
+.tl-head h2 { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .03em; white-space: nowrap; }
+.tl-head .tl-date { color: var(--ink-soft); font-weight: 600; font-size: 10.5px; margin-left: 4px; letter-spacing: 0; }
+.tl-sum { display: flex; flex-wrap: wrap; align-items: baseline; color: var(--ink-soft); font-size: 11.5px; font-weight: 500; }
+.tl-sum > span { white-space: nowrap; }
+.tl-sum > span + span::before { content: '·'; margin: 0 7px; color: #c9c4d2; }
+.tl-sum b { color: var(--ink); font-weight: 800; }
+.tl-sum .sw { display: inline-block; width: 14px; height: 7px; border-radius: 999px; margin-right: 5px; vertical-align: 1px; }
+.tl-sum .sw.ask { background: #3f3a4a; box-shadow: inset 0 0 0 1.5px #e2b35d; }
+.tl-sum .sw.idle { background: #e1dce7; }
+.tl-src { margin-left: auto; color: var(--ink-soft); font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.tl-src:empty { display: none; }
+.tl-close { position: absolute; right: -4px; top: -4px; border: 0; background: transparent; font: inherit; font-size: 18px; line-height: 1;
+  padding: 2px 6px; cursor: pointer; color: var(--ink-soft); border-radius: 999px; }
+.tl-close:hover { color: var(--ink); background: rgba(255,255,255,.8); }
+.tl-scroll { position: relative; flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.tl-grid { position: relative; padding-bottom: 2px; }
+.tl-axis { position: sticky; top: 0; z-index: 3; height: 18px; background: linear-gradient(#fffdfa 75%, rgba(255,253,250,0)); }
+.tl-ticks { position: absolute; left: var(--lw, 156px); right: 14px; top: 0; bottom: 0; }
+.tl-tick { position: absolute; top: 1px; transform: translateX(-50%); font-size: 10px; font-weight: 600; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-tick.tl-nowlab { color: var(--ink); font-weight: 800; }
+.tl-area { position: absolute; top: 0; bottom: 0; left: var(--lw, 156px); right: 14px; pointer-events: none; }
+.tl-lines { z-index: 0; }
+.tl-lines i { position: absolute; top: 16px; bottom: 0; width: 0; border-left: 1px solid rgba(90,70,110,.07); }
+.tl-nowa { z-index: 2; }
+.tl-now { position: absolute; top: 15px; bottom: 0; width: 0; margin-left: -.75px; border-left: 1.5px solid rgba(59,51,70,.5); }
+.tl-rows { position: relative; z-index: 1; }
+.tl-row { display: flex; align-items: center; height: 24px; border-radius: 8px; }
+.tl-row.top + .tl-row.top, .tl-row.sub + .tl-row.top { border-top: 1px dashed #ece8f0; border-radius: 0 0 8px 8px; height: 25px; }
+.tl-row.sub { height: 17px; }
+.tl-row.live { cursor: pointer; }
+.tl-row.live:hover { background: rgba(255,243,214,.55); }
+.tl-row.live:focus-visible { outline: 2px solid #f0b23a; outline-offset: -2px; }
+.tl-row.fold { cursor: pointer; }
+.tl-row.fold:hover { background: rgba(236,232,240,.6); }
+.tl-row.fold:focus-visible { outline: 2px solid #b9b2c6; outline-offset: -2px; }
+.tl-row.fold .tl-lab b { color: #8a8398; font-weight: 600; }
+.tl-row.fold .sg.work { opacity: .5; }
+.tl-lab { width: var(--lw, 156px); flex: none; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 0 8px 0 4px; white-space: nowrap; overflow: hidden; }
+.tl-lab .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, #9aa0b0); flex: none; }
+.tl-lab b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+.tl-lab .pj { color: var(--ink-soft); font-weight: 500; font-size: 11px; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+.tl-row.sub .tl-lab { padding-left: 17px; font-size: 11px; }
+.tl-row.sub2 .tl-lab { padding-left: 29px; }
+.tl-row.sub .tl-lab .dot { width: 6px; height: 6px; }
+.tl-row:not(.live) .tl-lab b { color: var(--ink-soft); } /* gone home: a softer name */
+.tl-track { position: relative; flex: 1; height: 12px; margin-right: 14px; }
+.tl-row.sub .tl-track { height: 7px; }
+.tl-track::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed rgba(90,70,110,.13); }
+.sg { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+.sg.work { background: var(--c, #9aa0b0); }
+.tl-row.sub .sg.work { opacity: .78; }
+.sg.idle { background: #e1dce7; }
+.sg.ask { z-index: 1; min-width: 4px; background: #3f3a4a; box-shadow: inset 0 0 0 1.5px #e2b35d; }
+.tl-row.sub .sg.ask { box-shadow: inset 0 0 0 1px #e2b35d; }
+.sg.s0 { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.sg.s1 { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.sg:hover { filter: brightness(1.07) saturate(1.05); }
+.mk { position: absolute; top: 50%; z-index: 2; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; background: #fff; border: 1.5px solid var(--m); color: var(--m);
+  font-size: 8.5px; font-weight: 800; line-height: 1; box-shadow: 0 1px 2px rgba(60,40,90,.16); }
+.tl-row.sub .mk { width: 12px; height: 12px; margin: -6px 0 0 -6px; font-size: 7.5px; }
+.mk.rep { --m: #6f9a6c; }
+.mk.spawn { --m: #7457c0; }
+.mk.ok, .mk.flag { border-radius: 3px; transform: rotate(-8deg); } /* a stamp */
+.mk.ok { --m: #46627f; }
+.mk.flag { --m: #b5705a; }
+.mk:hover { transform: scale(1.15); }
+.mk.ok:hover, .mk.flag:hover { transform: rotate(-8deg) scale(1.15); }
+.tl-empty { margin: 14px 0 12px; text-align: center; color: var(--ink-soft); font-weight: 600; }
+.tl-empty[hidden] { display: none; }
+.tl-tip { position: fixed; z-index: 200001; pointer-events: none; max-width: 270px; padding: 6px 10px 7px; border-radius: 12px;
+  background: #fffdfa; border: 1.5px solid #fff; color: var(--ink); font-size: 11.5px; line-height: 1.35;
+  box-shadow: 0 2px 0 rgba(90,70,110,.12), 0 10px 26px rgba(80,60,120,.2); }
+.tl-tip[hidden] { display: none; }
+.tl-tip .h { font-weight: 800; }
+.tl-tip .t { color: var(--ink-soft); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tl-tip .st { display: inline-block; width: 12px; height: 7px; border-radius: 999px; margin-right: 6px; vertical-align: 1px; }
+.tl-tip .st.idle { background: #e1dce7; }
+.tl-tip .st.ask { background: #3f3a4a; box-shadow: inset 0 0 0 1.5px #e2b35d; }
+.tl-tip .q { margin-top: 5px; padding: 4px 8px; border-radius: 9px; background: #3f3a4a; border: 1.5px solid #e2b35d; color: #fff8ea; font-weight: 700; }
+.tl-tip .x { margin-top: 3px; }
+/* while the drawer is open, the card, the log and the quiet-office note sit above it */
+body.tl-open #card, body.tl-open #log { bottom: calc(var(--tl-h, 0px) + 28px); }
+body.tl-open #log { max-height: max(120px, min(38vh, calc(100vh - var(--tl-h, 0px) - var(--hud-r, 50px) - 56px))); }
+body.tl-open #card { max-height: max(120px, calc(100vh - var(--tl-h, 0px) - var(--hud-h, 72px) - 38px)); max-height: max(120px, calc(100dvh - var(--tl-h, 0px) - var(--hud-h, 72px) - 38px)); }
+body.tl-open #empty { bottom: calc(var(--tl-h, 0px) + 36px); }
+body.tl-open #roster { max-height: max(120px, calc(100vh - max(64px, calc(var(--hud-r, 50px) + 10px)) - var(--tl-h, 0px) - 30px)); }
+@media (max-width: 760px) {
+  #timeline { left: 10px; right: 10px; bottom: 10px; padding: 9px 10px 7px 10px; }
+  .tl-lab .pj { display: none; }
+  .tl-sum { font-size: 11px; }
+  .tl-src { margin-left: 0; }
+  body.tl-open #card, body.tl-open #log { bottom: calc(var(--tl-h, 0px) + 18px); }
+}
+@media (prefers-reduced-motion: reduce) { #timeline { animation: none; } }
+
+/* ---- characters readability round 3 (T3b) ------------------------------------------------------------------------ */
+/* "finished · your turn": a calm sage chip on the tag; the amber ask stays the one alarm */
+.tag .rdy { font-size: 10.5px; font-weight: 800; letter-spacing: .01em; line-height: 1.35; color: #2f4a2e; background: #eaf2e5;
+  border: 1.5px solid #6f9a6c; padding: 0 6px; border-radius: 999px; }
+.tag.ready { border-color: #d5e4ce; }
+.tag.ready .st { display: none; } /* the chip takes the status dot's place */
+.tag.ready .dot { box-shadow: 0 0 0 2px rgba(255,255,255,.95), 0 0 0 3.5px #6f9a6c; } /* collapsed to its dot, still ready */
+/* handed back to the agent that gave the work: "✓ Sora's turn", an outlined chip (not the sage fill that means you) */
+.tag.handed .rdy { font-size: 10.5px; font-weight: 700; line-height: 1.35; color: #5b5470; background: transparent;
+  border: 1.5px dashed #a9a3b6; padding: 0 6px; border-radius: 999px; }
+.tag.handed .st { display: none; }
+body.night .tag.handed .rdy { color: #d9d4e4; border-color: rgba(201,195,214,.6); }
+/* helpers in their lead's pod: a mini ↳ chip in the lead's colour (bubbles.js sets --lc) */
+.tag .role.r-mini { background: var(--lc, #7457c0); padding: 1px 5px; font-size: 10px; }
+/* far zoom: a ring spreads from the tag when something new happens to that worker */
+.tag::before { content: ''; position: absolute; inset: -2px; border-radius: 999px; border: 2px solid var(--ping, var(--c, #888));
+  opacity: 0; pointer-events: none; }
+.tag.ready { --ping: #6f9a6c; }
+.tag.asking { --ping: #e2b35d; }
+.tag.ping::before { animation: tagping 1.25s ease-out; }
+@keyframes tagping { 0% { inset: -2px; opacity: .9; } 100% { inset: -11px; opacity: 0; } }
+/* the current task, above the tag on hover (absolute: the tag keeps its size) */
+.tag .hov { display: none; position: absolute; left: 50%; bottom: calc(100% + 5px); transform: translateX(-50%); max-width: 280px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 9px 3px; border-radius: 10px; background: #fffdfa;
+  color: var(--ink); font-size: 11px; font-weight: 600; border: 1.5px solid #fff; pointer-events: none;
+  box-shadow: 0 2px 0 rgba(90,70,110,.10), 0 6px 16px rgba(80,60,120,.14); }
+.tag .hov::before { content: 'task · '; color: var(--ink-soft); font-weight: 500; }
+.tag:hover .hov { display: block; }
+/* a bubble pushed sideways: the tail leaves from its side, toward the owner's head (bubbles.js sets --tail-y) */
+.bubble.tail-l::after, .bubble.tail-r::after { top: var(--tail-y, 50%); bottom: auto; }
+.bubble.tail-l::after { left: -9px; transform: translateY(-50%) rotate(135deg); }
+.bubble.tail-r::after { left: auto; right: -9px; transform: translateY(-50%) rotate(-45deg); }
+.bubble.glyph.tail-l::after { left: -5px; }
+.bubble.glyph.tail-r::after { right: -5px; }
+/* humming (♪) is office life: a grey mark, not an attention colour */
+.mark.ambient { color: #9a94a6; font-size: 17px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .tag.ping::before { animation: none; } }
+
+/* ---- overlay diet (R5a): lighter tags, one helper chip, night tags, status segments ------------------------------ */
+/* the status dot only when it says something: waiting on you (amber), a fresh error (red), on a break (grey) */
+.tag.working:not(.asking):not(.err) .st { display: none; }
+.tag.err:not(.asking) .st { background: #e07a7a; box-shadow: 0 0 0 2px rgba(224,122,122,.3); }
+/* the project: always on a lead's tag, on hover for everyone else (.ph) */
+.tag.ph:not(:hover) .proj { display: none; }
+/* helpers: one "↳ Lead" chip in the lead's colour everywhere; a tight tag truncates the name, never drops it */
+.tag .role.r-mini { max-width: 96px; overflow: hidden; text-overflow: ellipsis; padding: 1px 6px; font-size: 10.5px; } /* the size of every role chip */
+.tag.compact:not(:hover) .role.r-mini { max-width: 62px; }
+/* night (main.js sets body.night from the lamps): dark translucent tags that do not glare; bubbles stay paper, dimmed */
+body.night .tag { background: rgba(47,43,58,.82); color: #f4efe6; border-color: rgba(255,255,255,.14);
+  box-shadow: 0 2px 0 rgba(10,8,20,.25), 0 6px 16px rgba(10,8,20,.28); }
+body.night .tag:hover { background: rgba(58,53,72,.96); }
+body.night .tag .proj { color: #c9c1d6; }
+body.night .tag .dot { box-shadow: 0 0 0 2px rgba(47,43,58,.9); }
+body.night .tag.ready { border-color: rgba(111,154,108,.7); }
+body.night .tag.ready .dot { box-shadow: 0 0 0 2px rgba(47,43,58,.9), 0 0 0 3.5px #6f9a6c; }
+body.night .tag .hov { background: rgba(47,43,58,.94); color: #f4efe6; border-color: rgba(255,255,255,.14); }
+body.night .tag .hov::before { color: #c9c1d6; }
+body.night .bubble:not(.ask) { filter: brightness(.88); }
+/* the status card: line breaks fall between "· segments", never inside one */
+#count .seg, #count .ask, #count .ready { white-space: nowrap; }
+
+/* ---- links (Milestone 11): how surely a link is known, in bubbles, the Key, the card and the timeline ---------------- */
+/* an artifact or inferred link: the words of a real interaction in the grey ambient look (bubbles.js sets .weak); the
+   inferred one wears a small "?" chip. Declared and structural links keep the amber event look. */
+.bubble.weak { background: rgba(236,236,240,.92); border-style: dashed; border-color: #c6c2cf; color: #6f6880; font-weight: 600; }
+.bubble.weak::after { background: rgba(236,236,240,.92); border-right-style: dashed; border-bottom-style: dashed; border-color: #c6c2cf; }
+.bubble.glyph.weak, .bubble.glyph.weak::after { background: rgba(236,236,240,.95); border-color: #c6c2cf; border-style: dashed; }
+.bubble .q, .keypop .b .q { display: inline-block; margin-left: 5px; width: 14px; height: 14px; border-radius: 50%; background: #a9a3b6; color: #fff;
+  font-size: 10px; font-weight: 800; font-style: normal; line-height: 14px; text-align: center; vertical-align: 1px; }
+/* an approval relayed to an agent: calm sage, not an alarm */
+.bubble.calm { background: #f4f7f1; border-color: #a9c7a3; color: #2f4a2e; font-weight: 600; }
+.bubble.calm::after { background: #f4f7f1; border-color: #a9c7a3; }
+.bubble.glyph.calm, .bubble.glyph.calm::after { background: #f4f7f1; border-color: #a9c7a3; }
+/* the Key: the grey link bubble and the three thread line styles */
+.keypop .b.weak { background: rgba(236,236,240,.92); border-style: dashed; border-color: #c6c2cf; color: #6f6880; }
+.keypop .sw i.ln { width: 46px; height: 0; border-radius: 0; border-top: 3px solid var(--codex); opacity: .85; }
+.keypop .sw i.ln.dashed { border-top-style: dashed; }
+.keypop .sw i.ln.dotted { border-top-style: dotted; }
+/* the card's Messages: icon · line · channel chip · confidence glyph · when */
+#card .msgs { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #ece8f0; }
+#card .msgs .lab .sub { font-weight: 500; font-size: 10.5px; margin-left: 4px; }
+#card .msgs ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+#card .msgs li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto 12px auto; column-gap: 6px; align-items: baseline; font-size: 12px; line-height: 1.35; }
+#card .msgs .i { text-align: center; font-size: 11px; }
+#card .msgs .x { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#card .msgs .ch { font-size: 9.5px; font-weight: 800; color: #5d5569; background: #eee9f4; border-radius: 999px; padding: 0 6px; max-width: 84px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#card .msgs .ch.none { display: none; }
+#card .msgs .cf { font-size: 10px; font-weight: 800; text-align: center; color: #6f9a6c; }
+#card .msgs .cf-structural { color: #46627f; }
+#card .msgs .cf-artifact { color: #b07a3a; }
+#card .msgs .cf-inferred { color: #a9a3b6; }
+#card .msgs time { color: var(--ink-soft); font-size: 10.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* timeline and card-strip marks: a hand-over (⇄, amber-brown) and a launch (▶, slate blue) */
+.mk.hand, #card .cm.hand { --m: #b07a3a; }
+.mk.launch, #card .cm.launch { --m: #5d7798; }
