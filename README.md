@@ -148,7 +148,9 @@ tag to read them) and a tag rings briefly when something new happens to that wor
 | Review desk trays | reviews in progress on this floor / verdicts stamped on this floor |
 | Desk lamp on at night | someone is working at that desk; empty desks stay dark |
 | Facade windows lit at night, bay by bay | an occupied desk within about 4 m of that window |
-| Pendant over the meeting table / the lounge on at night | a kickoff is running / someone is in the lounge |
+| The lamp over the meeting table, huddle table or café table, or the lounge's floor lamp, on at night | a kickoff is running there / someone is sitting there |
+| Soft glow from the screen on the desk and sitter at night | someone at that desk, brighter while really working |
+| A chair left pushed back and turned in a meeting room | someone got up from it after a real kickoff; the next person to sit in it pulls it in |
 | Chair tucked in | nobody owns the desk right now |
 
 Every person's look comes from their id: one of ten hairstyles, a natural hair colour (a rare pastel dye), one of six
@@ -177,7 +179,7 @@ fidgety, sleepy, cheerful, sociable, plant person) is derived from its id so the
 **The building and its life (staging, but physical):** the office sits on a site with a lawn, a street, a path up
 two steps to a glass porch, a sign, a bench and trees that sway in the breeze. People arrive along the path, the door
 swings open before they reach it and springs shut behind them, and they wipe their feet on the mat. At night the
-office is lit from inside (warm ceiling lights, desk lamps only where someone works, the porch and street lamp on).
+office is lit from inside (warm light from the ceiling that the cutaway removes, desk lamps only where someone works, the porch and street lamp on).
 Everyone stands on a soft contact shadow, and anyone walking behind tall furniture shows as a faint silhouette in
 their agent colour. The coffee machine steams while someone brews and the water cooler bubbles when used (ambient).
 Each person has their own pace and thinking pose (chin on hand, hand to head, leaning back and looking up), rolls

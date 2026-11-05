@@ -72,23 +72,25 @@ function reapplyMode(floorGroup, node) {
 }
 const hash2 = (x, z) => { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); };
 
-function plankTexture() {
-  const c = document.createElement('canvas'); c.width = 512; c.height = 512;
-  const g = c.getContext('2d');
-  g.fillStyle = '#e6d3b7'; g.fillRect(0, 0, 512, 512);
-  const rows = 8;
+function plankTexture() { // 19 cm oak boards, each with its own tone and long grain; still calm, so people read first
+  const S = 1024, rows = 16, c = document.createElement('canvas'); c.width = S; c.height = S;
+  const g = c.getContext('2d'), h = S / rows;
+  g.fillStyle = '#c9b597'; g.fillRect(0, 0, S, S);                                                     // the gaps between boards
   for (let r = 0; r < rows; r++) {
-    const y = r * (512 / rows), offset = (r % 2) * 128;
+    const y = r * h, offset = hash2(r, 3.1) * S / 2;
     for (let k = -1; k < 3; k++) {
-      const x = offset + k * 256, shade = 0.97 + ((r * 7 + k * 13) % 5) * 0.015; // calm boards: a whisper of variation
-      g.fillStyle = `rgb(${Math.round(Math.min(255, 230 * shade))}, ${Math.round(Math.min(255, 211 * shade))}, ${Math.round(Math.min(255, 183 * shade))})`;
-      g.fillRect(x + 2, y + 2, 252, 512 / rows - 4);
+      const x = offset + k * S / 2, tone = 0.945 + hash2(r, k + 0.5) * 0.085;                          // no two boards alike
+      g.fillStyle = `rgb(${Math.round(Math.min(255, 232 * tone))}, ${Math.round(Math.min(255, 213 * tone))}, ${Math.round(Math.min(255, 185 * tone))})`;
+      g.fillRect(x + 1.5, y + 1.5, S / 2 - 3, h - 3);
+      for (let i = 0; i < 7; i++) {                                                                    // grain: long faint lines along the board
+        const gy = y + 4 + hash2(r + i * 7, k) * (h - 8), wob = (hash2(i, r + k) - 0.5) * 5;
+        g.strokeStyle = hash2(i, k + r * 3) > 0.5 ? 'rgba(122,88,54,0.07)' : 'rgba(255,246,226,0.08)'; g.lineWidth = 1 + hash2(k, i) * 1.2;
+        g.beginPath(); g.moveTo(x + 6, gy); g.bezierCurveTo(x + S / 6, gy + wob, x + S / 3, gy - wob, x + S / 2 - 6, gy + wob * 0.5); g.stroke();
+      }
     }
   }
-  g.strokeStyle = 'rgba(120,80,50,0.10)'; g.lineWidth = 2;
-  for (let r = 0; r <= rows; r++) { g.beginPath(); g.moveTo(0, r * 64); g.lineTo(512, r * 64); g.stroke(); }
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   return tex;
 }
 
@@ -100,7 +102,8 @@ function carpetTexture() { // 60 cm carpet tiles laid in alternating pile direct
     g.strokeStyle = 'rgba(255,255,255,0.05)'; g.lineWidth = 1;
     for (let i = 4; i < 64; i += 6) { g.beginPath(); if ((r + k) % 2) { g.moveTo(k * 64 + i, r * 64); g.lineTo(k * 64 + i, r * 64 + 64); } else { g.moveTo(k * 64, r * 64 + i); g.lineTo(k * 64 + 64, r * 64 + i); } g.stroke(); }
   }
-  g.strokeStyle = 'rgba(90,96,78,0.08)'; g.lineWidth = 2;
+  for (let i = 0; i < 2600; i++) { const f = hash2(i, 1.7); g.fillStyle = f > 0.5 ? 'rgba(255,255,245,0.07)' : 'rgba(70,74,58,0.07)'; g.fillRect(hash2(i, 2.3) * 256, hash2(i, 5.9) * 256, 1.4, 1.4); } // the flecks of a woven pile
+  g.strokeStyle = 'rgba(90,96,78,0.14)'; g.lineWidth = 2;
   for (let i = 0; i <= 256; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 256); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(256, i); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
@@ -779,7 +782,8 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
       ch.add(roundedBox(0.46, 0.08, 0.46, 0.08, toon(COLORS.chairSeat), { y: 0.42, outline: 0.012 }));
       ch.add(roundedBox(0.46, 0.42, 0.08, 0.08, toon(COLORS.chairSeat), { y: 0.68, z: -0.22, outline: 0.012 }));
       ch.add(cyl(0.03, 0.03, 0.34, toon(COLORS.chair), { y: 0.2 }, 10)); ch.add(starBase(0.24, COLORS.chair));
-      seats.push({ x: sx, z: sz, facing, seatY: 0.46, meeting: true, taken: null, floor: level });
+      ch.userData.dynamic = true; freezeStatic(ch);                                                     // a chair moves as one piece
+      seats.push({ x: sx, z: sz, facing, seatY: 0.46, meeting: true, taken: null, floor: level, chair: ch, was: false, left: false, k: 0 });
     }
     const wb = new THREE.Group(); wb.position.set(x0 + 0.6, 0, z0 + 0.55); wb.rotation.y = 0.55; group.add(wb);
     const board = canvasTex(512, 320);
@@ -821,7 +825,8 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
       sign.tex.needsUpdate = true;
     };
     drawSign(false);
-    return { setBoard: drawBoard, setSign: drawSign, x0, x1, z0, z1, seats, presenter: { x: tx, z: z0 + 0.8, facing: 0 }, floor: level,
+    const updateChairs = dt => settleChairs(seats, dt);
+    return { setBoard: drawBoard, setSign: drawSign, x0, x1, z0, z1, seats, presenter: { x: tx, z: z0 + 0.8, facing: 0 }, floor: level, updateChairs,
       team: null, expected: new Set(), session: false, sessionEnd: 0, deadline: 0, cool: new Map(),
       // the sliding door: open by default (closing it does not block navigation, so whoever closes it opens it for
       // people passing); door = the doorway centre, doorWantOpen mirrors the last request
@@ -924,7 +929,7 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
   const lampG = new THREE.Group(); lampG.position.set(lx - 1.15, 0, lz + 1.35); group.add(lampG); obs(lx - 1.15, lz + 1.35, 0.4, 0.4);
   lampG.add(cyl(0.18, 0.2, 0.04, toon(PAL.slateDark), { y: 0.02 }, 16));
   lampG.add(cyl(0.025, 0.025, 1.5, toon(PAL.slateDark), { y: 0.77 }, 8));
-  const shadeMat = toon(0xfff1c9, { side: THREE.DoubleSide, emissive: 0xffe29a, emissiveIntensity: 0 });
+  const shadeMat = toon(0xfff1c9, { side: THREE.DoubleSide, emissive: 0xffe29a, emissiveIntensity: 0 }).clone(); shadeMat.userData.own = true; // lit (at night) while the lounge is in use
   const shade = mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.36, 18, 1, true), shadeMat, { y: 1.62, outline: 0.012 }); lampG.add(shade);
   const seatAt = (x, z, facing, seatY, back = 0.6) => ({ x, z, facing, seatY, taken: false, approach: { x: x + Math.sin(facing) * back, z: z + Math.cos(facing) * back } });
   let loungeSeats = [];
@@ -1242,7 +1247,8 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
       ch.add(roundedBox(0.44, 0.08, 0.44, 0.08, toon(PAL.sage), { y: 0.42, outline: 0.012 }));
       ch.add(roundedBox(0.44, 0.38, 0.08, 0.08, toon(PAL.sage), { y: 0.66, z: -0.21, outline: 0.012 }));
       ch.add(cyl(0.03, 0.03, 0.34, toon(COLORS.chair), { y: 0.2 }, 10)); ch.add(starBase(0.23, COLORS.chair));
-      seats.push({ x: sx, z: sz, facing, seatY: 0.46, meeting: true, taken: null, floor: level });
+      ch.userData.dynamic = true; freezeStatic(ch);
+      seats.push({ x: sx, z: sz, facing, seatY: 0.46, meeting: true, taken: null, floor: level, chair: ch, was: false, left: false, k: 0 });
     }
     // a screen on a slim stand against the back glass, facing the table (the kickoff list shows on it)
     const sw = 1.0, shh = 0.6, scz = z0 + 0.16, scy = 1.35;
@@ -1285,7 +1291,8 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
       sign.tex.needsUpdate = true;
     };
     drawSign(false);
-    return { setBoard: drawScreen, setSign: drawSign, x0, x1, z0, z1, seats, small: true, presenter: { x: tx - 0.75, z: z0 + 0.5, facing: 0.35 }, floor: level,   // on the door side, clear of the screen as the camera sees it
+    const updateChairs = dt => settleChairs(seats, dt);
+    return { setBoard: drawScreen, setSign: drawSign, x0, x1, z0, z1, seats, small: true, updateChairs, presenter: { x: tx - 0.75, z: z0 + 0.5, facing: 0.35 }, floor: level,   // on the door side, clear of the screen as the camera sees it
       team: null, expected: new Set(), session: false, sessionEnd: 0, deadline: 0, cool: new Map(),
       door: { x: dx0 + doorW / 2, z: z0 }, doorWantOpen: true,
       setDoor(open) { this.doorWantOpen = !!open; slide.target = open ? 1 : 0; },
@@ -1815,13 +1822,11 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
     m.castShadow = m.receiveShadow = false; m.renderOrder = 1; m.visible = false; m.userData.dynamic = true; m.userData.noMode = true; m.userData.noMerge = true;
     group.add(m); return m;
   })();
-  // pendants: one over the meeting table, one over the lounge; each lights (at night) only while its room is in use.
-  // Shade, cord and ceiling rose are static; the diffuser and bulb share one own material under a dynamic group.
-  const pendant = (x, z, shadeCol) => {
-    const y = 2.3, top = y + 0.1;
-    group.add(cyl(0.006, 0.006, wallH - top, toon(PAL.ink), { x, y: (wallH + top) / 2, z, cast: false }, 6));                 // cord
-    group.add(cyl(0.06, 0.05, 0.03, toon(PAL.paper), { x, y: wallH - 0.015, z, cast: false, outline: 0.005 }, 14));           // ceiling rose
-    group.add(cyl(0.035, 0.035, 0.06, toon(PAL.slateDark), { x, y: top + 0.01, z, cast: false }, 10));                          // lamp holder
+  // Lamps over the rooms in use, each lit (at night) only while its room is in use. The ceiling is cut away, so nothing may
+  // hang from it: a glass room's lamp hangs from a beam between its own glass walls, which rise to the slab; the café's is an
+  // arc floor lamp reaching over the table; the lounge has its floor lamp. The diffuser and bulb share one own material.
+  const lampHead = (x, z, shadeCol, y) => {
+    group.add(cyl(0.035, 0.035, 0.06, toon(PAL.slateDark), { x, y: y + 0.11, z, cast: false }, 10));                          // lamp holder
     group.add(mesh(new THREE.CylinderGeometry(0.075, 0.25, 0.2, 28, 1, true), toon(shadeCol, { side: THREE.DoubleSide }), { x, y, z, outline: 0.008 }));
     const lit = toon(0xfff1c9, { emissive: 0xffd88a, emissiveIntensity: 0 }).clone(); lit.userData.own = true;
     const lg = new THREE.Group(); lg.position.set(x, 0, z); lg.userData.dynamic = true; group.add(lg);
@@ -1830,11 +1835,26 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
     freezeStatic(lg);                                                                                                          // diffuser + bulb: one draw
     return { mat: lit, k: 0 };
   };
-  const meetingPendant = pendant((meeting.x0 + meeting.x1) / 2, (meeting.z0 + meeting.z1) / 2 + 0.25, PAL.mustard);
-  const reviewPendant = pendant(qx, qz, PAL.sage);
-  const huddlePendant = pendant((huddle.x0 + huddle.x1) / 2 - 0.1, (huddle.z0 + huddle.z1) / 2, PAL.slate);
-  const loungePendant = pendant(lx + [0.1, 0.25, 0.2][variant], lz, [PAL.sage, PAL.terracotta, PAL.slate][variant]);
-  const cafePendants = [-0.65, 0.65].map(dz => pendant(cafe.center.x, cafe.center.z + dz, PAL.mustard));
+  const beamMat = matte(PAL.slateLight);
+  const beamPendant = (x, z, shadeCol, room) => {
+    const y = 2.3, top = y + 0.14, beamY = wallH - 0.05, along = room.x1 - room.x0 < room.z1 - room.z0;                       // the short way across
+    if (along) group.add(mesh(new THREE.BoxGeometry(room.x1 - room.x0, 0.07, 0.06), beamMat, { x: (room.x0 + room.x1) / 2, y: beamY, z, cast: false }));
+    else group.add(mesh(new THREE.BoxGeometry(0.06, 0.07, room.z1 - room.z0), beamMat, { x, y: beamY, z: (room.z0 + room.z1) / 2, cast: false }));
+    group.add(cyl(0.006, 0.006, beamY - top, toon(PAL.ink), { x, y: (beamY + top) / 2, z, cast: false }, 6));                  // cord
+    return lampHead(x, z, shadeCol, y);
+  };
+  const arcLamp = (baseX, baseZ, x, z, shadeCol) => {
+    const y = 1.95, stem = new THREE.CubicBezierCurve3(new THREE.Vector3(baseX, 0.04, baseZ), new THREE.Vector3(baseX, 2.3, baseZ), new THREE.Vector3(x, 2.75, z), new THREE.Vector3(x, y + 0.14, z));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(stem, 28, 0.016, 6, false), toon(PAL.slateDark)));
+    group.add(cyl(0.2, 0.22, 0.05, toon(PAL.slateDark), { x: baseX, y: 0.025, z: baseZ, outline: 0.006 }, 20));                // a heavy base, to carry the reach
+    obs(baseX, baseZ, 0.44, 0.44); contact(baseX, baseZ, 0.6, 0.6);
+    return lampHead(x, z, shadeCol, y);
+  };
+  const meetingPendant = beamPendant((meeting.x0 + meeting.x1) / 2, (meeting.z0 + meeting.z1) / 2 + 0.25, PAL.mustard, meeting);
+  const reviewPendant = beamPendant(qx, qz, PAL.sage, qa.room);
+  const huddlePendant = beamPendant((huddle.x0 + huddle.x1) / 2 - 0.1, (huddle.z0 + huddle.z1) / 2, PAL.slate, huddle);
+  const loungePendant = { mat: shadeMat, k: 0 };
+  const cafePendants = [arcLamp(-hx + 4.9 + 0.1, -0.3 + 1.3 + 0.5, -hx + 4.9, -0.3 + 0.2, PAL.mustard)];
   const updatePendants = dt => {
     const meetOn = !!meeting.team, loungeOn = lounge.seats.some(s => s.taken) || !!foos?.spots.some(s => s.taken);
     const reviewOn = qa.spots.some(s => s.taken);
@@ -1968,15 +1988,33 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
     }
     if (changed) col.needsUpdate = true;
   };
-  function setMode(mode) { shell.visible = mode === 'normal'; outline.visible = mode === 'ghost'; facade.visible = mode === 'dim'; if (contactMesh) contactMesh.visible = mode === 'normal'; if (facade.visible) updateFacade(); }
+  function setMode(mode) { shell.visible = mode === 'normal'; outline.visible = mode === 'ghost'; facade.visible = mode === 'dim'; if (contactMesh) contactMesh.visible = mode === 'normal'; if (wallShadeMesh) wallShadeMesh.visible = mode === 'normal'; if (facade.visible) updateFacade(); }
 
   // soft contact shadows under the furniture: every pool of the floor in one transparent mesh (one draw), just above the
   // carpets and rugs; drawn only on the floor you look at (a dimmed floor is closed by its facade, a ghost has no furniture)
-  let contactMesh = null;
+  let contactMesh = null, wallShadeMesh = null;
   if (contacts.length) {
     const geos = contacts.map(([x, z, w, d]) => { const p = new THREE.PlaneGeometry(w, d); p.rotateX(-Math.PI / 2); p.translate(x, 0.016, z); return p; });
     const sm = new THREE.Mesh(mergeGeometries(geos, false), contactShadowMat()); for (const x of geos) x.dispose();
     sm.castShadow = sm.receiveShadow = false; sm.userData.noMerge = true; sm.userData.dynamic = true; group.add(sm); contactMesh = sm;
+  }
+  // where walls meet the floor the light is shut out a little: a soft dark band on the floor and up the wall, faded by vertex
+  // alpha, in one mesh and one draw, drawn only on the floor you look at. Not screen-space shading: this costs no extra pass.
+  const WALL_IN = 0.012, wallShade = [];
+  const band = (ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, k) => wallShade.push({ p: [ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz], k });  // a,b on the wall line (dark); c,d the far edge (clear)
+  const floorBand = (ax, az, bx, bz, nx, nz, reach = 0.95, k = 0.34) => band(ax, 0.017, az, bx, 0.017, bz, bx + nx * reach, 0.017, bz + nz * reach, ax + nx * reach, 0.017, az + nz * reach, k);
+  const wallBand = (ax, az, bx, bz, nx, nz, rise = 0.75, k = 0.3) => band(ax + nx * WALL_IN, 0, az + nz * WALL_IN, bx + nx * WALL_IN, 0, bz + nz * WALL_IN, bx + nx * WALL_IN, rise, bz + nz * WALL_IN, ax + nx * WALL_IN, rise, az + nz * WALL_IN, k);
+  floorBand(-hx, -hz, hx, -hz, 0, 1); wallBand(-hx, -hz, hx, -hz, 0, 1);                                                   // the back wall
+  floorBand(-hx, -hz, -hx, hz, 1, 0); floorBand(hx, -hz, hx, hz, -1, 0);                                                    // the end walls
+  floorBand(core.x0, core.z1, core.x1, core.z1, 0, 1); wallBand(core.x0, core.z1, core.x1, core.z1, 0, 1);                  // the front of the core
+  {
+    const pos = new Float32Array(wallShade.length * 12), col = new Float32Array(wallShade.length * 16), idx = [];
+    wallShade.forEach(({ p, k }, n) => { pos.set(p, n * 12);
+      for (let v = 0; v < 4; v++) col.set([0.17, 0.12, 0.08, v < 2 ? k : 0], n * 16 + v * 4);
+      const b = n * 4; idx.push(b, b + 1, b + 2, b, b + 2, b + 3); });
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 4)); geo.setIndex(idx);
+    const shadeMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    shadeMesh.castShadow = shadeMesh.receiveShadow = false; shadeMesh.renderOrder = 1; shadeMesh.userData.noMerge = true; shadeMesh.userData.dynamic = true; shadeMesh.userData.noMode = true; group.add(shadeMesh); wallShadeMesh = shadeMesh;
   }
   const batch = freezeStatic(group); // one draw per material for everything that never moves
   group.userData.batch = batch;
@@ -2002,7 +2040,7 @@ export function buildOffice(scene, cols, rows, { level = 0 } = {}) {
       ceilingPools.visible = (group.userData.mode || 'normal') === 'normal' && NIGHT.lamps > 0.01;
       ceilingPoolMat.opacity = 0.2 * NIGHT.lamps;
       if ((group.userData.mode || 'normal') !== 'normal') { door?.update(dt); return; } // a floor you are not looking at animates nothing but its entrance door (people still walk in through it)
-      updatePendants(dt); for (const r of [meeting, huddle]) { const t = r.team; r.setSign(!!t, t ? (t.agent?.project || t.name || '') : ''); r.updateDoor(dt); } door?.update(dt); foos?.update(dt); coffee.update(dt); copier?.update(dt); cooler?.update(dt); catCtl.update(dt); clock.update(); for (const p of pods) p.update(dt); for (const d of desks) d.update(dt);
+      updatePendants(dt); for (const r of [meeting, huddle]) { const t = r.team; r.setSign(!!t, t ? (t.agent?.project || t.name || '') : ''); r.updateDoor(dt); r.updateChairs(dt); } door?.update(dt); foos?.update(dt); coffee.update(dt); copier?.update(dt); cooler?.update(dt); catCtl.update(dt); clock.update(); for (const p of pods) p.update(dt); for (const d of desks) d.update(dt);
       for (const w of wcs) { const busy = !!w.spot.taken; if (busy !== w.shown) { w.shown = busy; const c = busy ? PAL.terracotta : PAL.sage; w.dotMat.color.setHex(c); w.dotMat.emissive.setHex(c); } } },
     dispose() { scene.remove(group); disposeFloor(group, [floorTex]); },
   };
@@ -2054,6 +2092,19 @@ function clearProps(node) {
   node.clear();
 }
 
+/** A chair someone got up from stays where they left it, pushed back and a little turned, until the next person to use that
+ *  chair pulls it in. Only a real kickoff moves one. (Kept per page: a tab opened later finds the room tidy.) */
+function settleChairs(seats, dt) {
+  seats.forEach((st, i) => {
+    if (st.taken) { st.was = true; st.left = false; } else if (st.was) { st.was = false; st.left = true; }
+    const before = st.k; st.k += ((st.left ? 1 : 0) - st.k) * Math.min(1, dt * 2.5);
+    if (st.k === before) return;
+    const out = 0.15 + hash2(i, 4.1) * 0.17, turn = (hash2(i, 9.3) - 0.5) * 0.9;
+    st.chair.position.set(st.x + Math.sin(st.facing) * -out * st.k, 0, st.z + Math.cos(st.facing) * -out * st.k + (hash2(i, 2.2) - 0.5) * 0.12 * st.k);
+    st.chair.rotation.y = st.facing + turn * st.k;
+  });
+}
+
 function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
   const applyMode = node => reapplyMode(group, node);
   obs(cx, cz + 0.6, 2.05, 0.8); obs(cx, cz + 0.6 - 0.78, 0.5, 0.5);
@@ -2092,8 +2143,12 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
   const MON_X = laptop ? 0.06 : screens === 'arm' ? -0.08 : -0.1;
   const housing = white ? PAL.paper : screens === 'arm' ? PAL.slateDark : COLORS.monitor;
   const mon = makeMonitor(screens === 'arm' ? 'arm' : 'foot', housing); mon.position.set(MON_X, 0.75, 0.16); if (screens === 'arm') mon.rotation.y = 0.07; g.add(mon);
-  const glow = mesh(new THREE.CircleGeometry(0.55, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }), { x: MON_X, y: 0.755, z: -0.03, cast: false });
-  glow.rotation.x = -Math.PI / 2; glow.scale.set(1, 0.6, 1); g.add(glow);
+  // at night the screen lights what is in front of it: a soft pool on the desk and a glow on whoever sits there, in the
+  // screen's own colour, by how much the screen is doing (off and out of the draw by day, and on floors you are not looking at)
+  const glow = mesh(new THREE.CircleGeometry(0.55, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, map: glowTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }), { x: MON_X, y: 0.757, z: -0.05, cast: false });
+  glow.rotation.x = -Math.PI / 2; glow.scale.set(1, 0.6, 1); glow.visible = false; glow.userData.dynamic = true; glow.userData.noMode = true; g.add(glow);
+  const faceGlow = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, map: glowTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  faceGlow.position.set(MON_X * 0.5, 1.02, -0.28); faceGlow.scale.setScalar(0.95); faceGlow.visible = false; faceGlow.userData.dynamic = true; g.add(faceGlow);
   g.add(box(0.44, 0.025, 0.15, toon(COLORS.keyboard), { y: 0.765, z: -0.12, outline: 0.008 }));
   const mouse = sphere(0.035, toon(COLORS.keyboard), { x: 0.33, y: 0.775, z: -0.12 }, 10); mouse.scale.set(1, 0.7, 1.3); g.add(mouse);
   // the hutch: a low open oak shelf on the desk's back-left corner (clear of the monitor and its status strip), books
@@ -2153,7 +2208,7 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
   const binX = 1.12 + (hb - 0.5) * 0.06, binZ = 0.15 + (hb2 - 0.5) * 0.06;
   {
     const bin = new THREE.Group(); bin.position.set(binX, 0, binZ); bin.rotation.y = hb * Math.PI * 2; g.add(bin);
-    bin.add(cyl(0.1, 0.085, 0.27, toon(white ? PAL.slateDark : hutch ? PAL.oakMid : PAL.metal), { y: 0.135, outline: 0.008 }, 14));
+    bin.add(cyl(0.1, 0.085, 0.27, toon(white ? PAL.paper : hutch ? PAL.oakMid : PAL.metal), { y: 0.135, outline: 0.008 }, 14));
     bin.add(cyl(0.088, 0.088, 0.01, toon(PAL.slate), { y: 0.272, cast: false }, 14));
     bin.add(box(0.07, 0.05, 0.012, toon(white ? PAL.paper : PAL.sage), { y: 0.17, z: 0.096, cast: false }));
   }
@@ -2290,7 +2345,7 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
       const c = vendorKey ? (VENDOR[vendorKey]?.screen ?? 0xffffff) : SCREEN_OFF;
       mon.userData.panelMat.color.setHex(c); mon.userData.logoMat.color.setHex(vendorKey ? VENDOR[vendorKey].accent : 0x8884a0);
       occupant = vendorKey; paintSecondScreen();
-      if (vendorKey) { glow.material.color.setHex(c); this.glowTarget = 0.55; } else this.glowTarget = 0;
+      if (vendorKey) { glow.material.color.setHex(c); faceGlow.material.color.setHex(c); this.glowTarget = 0.55; } else this.glowTarget = 0;
     },
     setLead(v) {
       if (this.isLead === v) return; this.isLead = v;
@@ -2360,7 +2415,10 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
     update(dt) {
       this.t += dt;
       const flicker = this.glowTarget > 0 ? 1 + Math.sin(this.t * 7.3) * 0.05 + Math.sin(this.t * 2.1) * 0.05 : 1;
-      glow.material.opacity += (this.glowTarget * flicker * (1 + NIGHT.lamps * 0.5) - glow.material.opacity) * Math.min(1, dt * 4);
+      const screenLight = (group.userData.mode || 'normal') === 'normal' ? this.glowTarget * flicker * NIGHT.lamps : 0;
+      glow.material.opacity += (screenLight * 1.5 - glow.material.opacity) * Math.min(1, dt * 4);
+      faceGlow.material.opacity = glow.material.opacity * 0.8;
+      glow.visible = faceGlow.visible = glow.material.opacity > 0.01;
       chair.position.z += (this.chairTarget - chair.position.z) * Math.min(1, dt * 5);
       swivel.rotation.y = this.chairSwivel;
       jobKit.update(dt);

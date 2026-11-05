@@ -19,7 +19,8 @@ import { pulseJobLights } from './jobprops.js';
 const SPEED = 2.4;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
-const STANDING = new Set(['brief', 'present', 'collect', 'byeWave', 'ambient', 'handover', 'review', 'meet']);
+const STANDING = new Set(['brief', 'present', 'collect', 'byeWave', 'ambient', 'handover', 'review', 'meet', 'wipe']);
+const PERSONAL_SPACE = 0.55; // how far apart standing people keep, centre to centre: a chibi head is about half a metre wide
 // idle picks for finished helpers / reviewers: [anim, min s, max s], drawn at random (never a fixed loop)
 const HELPER_IDLE = [['idle', 3, 7], ['idle', 2.5, 6], ['stretch', 2, 3.2], ['shoulders', 1.4, 2.2], ['leanback', 3, 6], ['phone', 3, 6]];
 const QA_IDLE_SIT = [['idle', 3, 6], ['read', 4, 9], ['read', 3, 7], ['leanback', 3, 5], ['shoulders', 1.4, 2]];
@@ -1227,12 +1228,19 @@ export class Worker {
           if (tgt.climb) this.y = stairHeight(tgt.climb.flight, this.pos.z) + tgt.climb.offset; else if (this.path.length > 1 || dist > 0.8) {
             // soft separation from other people on the same floor
             let px = 0, pz = 0;
+            const ux = dx / dist, uz = dz / dist;
             for (const o of this.mgr.workers.values()) {
               if (o === this || o.done || o.floor !== this.floor) continue;
               const ox = this.pos.x - o.pos.x, oz = this.pos.z - o.pos.z, d = Math.hypot(ox, oz);
-              if (d > 0.001 && d < 0.6) { const f = (0.6 - d) / 0.6; px += ox / d * f; pz += oz / d * f; }
+              if (d > 0.001 && d < 0.6) { const f = (0.6 - d) / 0.6; px += ox / d * f * 1.2; pz += oz / d * f * 1.2; }
+              // someone in the way, standing or coming the other way: step aside early instead of sliding through them
+              if (o.chibi?.pose === 'sit' || d > 1.1) continue;
+              const along = -ox * ux - oz * uz, side = -ox * uz + oz * ux;
+              if (along <= 0 || Math.abs(side) > 0.55 || (o.state === 'walk' && Math.sin(o.heading) * ux + Math.cos(o.heading) * uz > 0.4)) continue; // beside us, or going our way: `follow` slows us instead
+              const away = (side > 0.05 ? -1 : 1) * (1 - along / 1.1); // dead ahead: each keeps to their own right, so two people pass
+              px += uz * away; pz += -ux * away;
             }
-            if (px || pz) { const nx = this.pos.x + px * dt * 1.2, nz = this.pos.z + pz * dt * 1.2; if (this.office.nav.isFree(nx, nz) || this.outdoors) { this.pos.x = nx; this.pos.z = nz; } } // outside the grid (the path) people still keep apart
+            if (px || pz) { const nx = this.pos.x + px * dt, nz = this.pos.z + pz * dt; if (this.office.nav.isFree(nx, nz) || this.outdoors) { this.pos.x = nx; this.pos.z = nz; } } // outside the grid (the path) people still keep apart
           }
         }
         break;
@@ -1364,10 +1372,10 @@ export class Worker {
       for (const o of this.mgr.workers.values()) {
         if (o === this || o.done || o.floor !== this.floor || o.fade < 0.3) continue;
         const ox = this.pos.x - o.pos.x, oz = this.pos.z - o.pos.z, d = Math.hypot(ox, oz);
-        if (d >= 0.35) continue;
-        if (d > 0.001) { const f = (0.35 - d) / 0.35; px += ox / d * f; pz += oz / d * f; } else { const a = (hash(this.id) % 628) / 100; px += Math.cos(a) * 0.5; pz += Math.sin(a) * 0.5; }
+        if (d >= PERSONAL_SPACE) continue;
+        if (d > 0.001) { const f = (PERSONAL_SPACE - d) / PERSONAL_SPACE; px += ox / d * f; pz += oz / d * f; } else { const a = (hash(this.id) % 628) / 100; px += Math.cos(a) * 0.5; pz += Math.sin(a) * 0.5; }
       }
-      if (px || pz) { const nx = this.pos.x + px * dt * 0.6, nz = this.pos.z + pz * dt * 0.6; if (this.office.nav.isFree(nx, nz)) { this.pos.x = nx; this.pos.z = nz; } }
+      if (px || pz) { const nx = this.pos.x + px * dt * 1.4, nz = this.pos.z + pz * dt * 1.4; if (this.office.nav.isFree(nx, nz) || this.outdoors) { this.pos.x = nx; this.pos.z = nz; } }
     }
 
     if (this.reaction) {

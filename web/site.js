@@ -271,17 +271,22 @@ export function buildSite(scene, office) {
     const g = m => m.geometry;
     return {
       body: g(roundedBox(3.5, 0.56, 1.56, 0.3, iron)), cabin: g(roundedBox(1.95, 0.44, 1.38, 0.24, iron)), roof: g(roundedBox(2.02, 0.07, 1.44, 0.26, iron)),
+      sill: new THREE.BoxGeometry(2.06, 0.035, 1.42), door: new THREE.BoxGeometry(0.018, 0.34, 1.58), arch: new THREE.CylinderGeometry(0.385, 0.385, 1.575, 18), mirror: new THREE.BoxGeometry(0.08, 0.07, 0.13),
       pillar: new THREE.BoxGeometry(0.09, 0.44, 1.43), bumper: new THREE.BoxGeometry(0.14, 0.14, 1.2), lamp: new THREE.BoxGeometry(0.05, 0.1, 0.24),
       tyre: new THREE.CylinderGeometry(0.3, 0.3, 0.22, 16), hub: new THREE.CylinderGeometry(0.14, 0.14, 0.23, 12),
     };
   })();
-  const carGlass = toon(0x8fa1b5), carTyre = toon(0x4a4656), carTrim = toon(PAL.metal), headLamp = toon(PAL.paper), tailLamp = toon(0xb9624d);
+  const carGlass = toon(0x37434f), carTyre = toon(0x3c3946), carTrim = toon(PAL.metal), headLamp = toon(PAL.paper), tailLamp = toon(0xb9624d);
   const parkedCar = (x, z, paint, yaw) => {
     const car = new THREE.Group(); car.position.set(x, GROUND, z); car.rotation.y = yaw; group.add(car);
     const p = toon(paint);
     car.add(mesh(carGeo.body, p, { y: 0.62, outline: 0.012 }));
     car.add(mesh(carGeo.cabin, carGlass, { x: -0.2, y: 1.12, outline: 0.012 }));
     car.add(mesh(carGeo.roof, p, { x: -0.2, y: 1.375, outline: 0.012 }));
+    car.add(mesh(carGeo.sill, carTrim, { x: -0.2, y: 0.905, cast: false }));                                   // a bright line under the windows
+    car.add(mesh(carGeo.door, carTyre, { x: -0.2, y: 0.66, cast: false }));                                    // the shut line between the doors
+    for (const dx of [-1.12, 1.12]) { const a = mesh(carGeo.arch, carTyre, { x: dx, y: 0.34, cast: false }); a.rotation.x = Math.PI / 2; car.add(a); } // wheel arches
+    for (const sz of [-1, 1]) car.add(mesh(carGeo.mirror, p, { x: 0.62, y: 0.97, z: sz * 0.76, outline: 0.006 }));
     for (const dx of [-0.93, -0.2, 0.53]) car.add(mesh(carGeo.pillar, p, { x: dx, y: 1.12 }));                // C, B and A pillars (the rounded ends read as the screens)
     for (const s of [-1, 1]) {
       car.add(mesh(carGeo.bumper, carTrim, { x: s * 1.72, y: 0.42, outline: 0.008 }));
