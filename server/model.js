@@ -7,6 +7,7 @@
 // (`touches`); the process reader adds weak cwd/time pid joins (`pidWeak`), the shared-file reader turns a write by A
 // and a read by B of one file into an `artifact` link. The snapshot keeps `pid` / `pidWeak` per agent, not the touches.
 import { CONFIG } from './config.js';
+import { resolveOpens } from './open.js';
 import { collectClaude } from './collectors/claude.js';
 import { collectCodex, codexSchedules } from './collectors/codex.js';
 import { collectCursor, cursorJobs } from './collectors/cursor.js';
@@ -20,6 +21,9 @@ import { JobBook } from './jobbook.js';
 import { StartedBy } from './startedby.js';
 import { createJobDrop } from './jobdrop.js';
 import { waitingOnJob } from '../web/jobs.js';
+
+/** who can be opened right now, and how (server/open.js); the page only ever names an agent */
+export const openBook = { targets: new Map() };
 
 const idleSince = new Map();   // id -> ms when it became idle
 const lastStatus = new Map();  // id -> status at the previous poll
@@ -271,6 +275,8 @@ export async function buildSnapshot(now = Date.now(), opts = {}) {
     members: present.filter(a => a.teamId === tid && a.id !== tid && a.role !== 'reviewer').map(a => a.id),
     reviewers: present.filter(a => a.teamId === tid && a.role === 'reviewer').map(a => a.id),
   }));
+
+  openBook.targets = resolveOpens(present);
 
   return {
     type: 'snapshot',

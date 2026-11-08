@@ -620,3 +620,8 @@ body.tl-open .hostedNote { display: none; }
 @media (max-width: 620px) { .hostedNote { border-radius: 16px; left: 12px; right: 12px; transform: none; font-size: 12px; bottom: 12px; } }
 .nogl { position: fixed; inset: 0; z-index: 100; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; font-weight: 600; color: var(--ink); }
 .nogl img { max-width: min(900px, 100%); border-radius: 12px; }
+
+/* the worker card's way to that agent's real chat; only there when it can really be opened */
+#card .openChat { display: block; width: 100%; box-sizing: border-box; margin: 8px 0 2px; padding: 7px 12px; border: 0; border-radius: 10px; background: var(--ink); color: var(--paper); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+#card .openChat:hover { opacity: .88; }
+#card .openChat:disabled { opacity: .55; cursor: default; }

@@ -10,7 +10,8 @@ import { buildSnapshot } from './model.js';
 import { Journal, localDate, isValidDay } from './journal.js';
 import { logError, logRecovered } from './tail.js';
 import { Director } from '../web/director.js';
-import { jobBook, startedBy } from './model.js';
+import { jobBook, startedBy, openBook } from './model.js';
+import { openLink } from './open.js';
 import { JobBook } from './jobbook.js';
 import { StartedBy } from './startedby.js';
 import { scanSessionStarts } from './collectors/claude.js';
@@ -60,6 +61,7 @@ function sendJson(res, status, body, extra = {}) {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const perfLog = [];
+let lastOpenAt = 0;
 async function handle(req, res) {
   if (!isLocalRequest(req.headers, CONFIG.port)) return sendText(res, 403, 'forbidden');
   let url, p;
@@ -82,6 +84,19 @@ async function handle(req, res) {
       return sendJson(res, 200, { ok: true });
     }
     return sendJson(res, 200, { entries: perfLog });
+  }
+  if (p === '/api/open') { // a worker card's button: names an agent, never a link
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' });
+    if (!req.headers.origin) return sendJson(res, 403, { error: 'from the office page only' });
+    if (Date.now() - lastOpenAt < 700) return sendJson(res, 429, { error: 'one at a time' });
+    let body = '';
+    for await (const chunk of req) { body += chunk; if (body.length > 512) return sendJson(res, 413, { error: 'too large' }); }
+    let id; try { ({ id } = JSON.parse(body)); } catch { return sendJson(res, 400, { error: 'bad json' }); }
+    const target = typeof id === 'string' ? openBook.targets.get(id) : null;
+    if (!target) return sendJson(res, 404, { error: 'that worker cannot be opened' });
+    lastOpenAt = Date.now();
+    try { await openLink(target.url); return sendJson(res, 200, { ok: true }); }
+    catch (e) { logError('[open]', e); return sendJson(res, 500, { error: 'could not open it' }); }
   }
   if (p === '/api/state') {
     if (!latestJson) return sendJson(res, 503, { error: 'starting up' }, { 'Retry-After': '2' });

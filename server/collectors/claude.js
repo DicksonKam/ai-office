@@ -2,6 +2,7 @@
 //  - ~/.claude/sessions/<pid>.json                         live registry (status busy/idle, cwd, title)
 //  - ~/.claude/projects/<slug>/<sessionId>.jsonl            transcript (what is in their head)
 //  - ~/.claude/projects/<slug>/<sessionId>/subagents/agent-<id>.jsonl   subagent transcripts (helpers)
+import { claudeDesktopLink } from '../open.js';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
@@ -484,6 +485,7 @@ export async function collectClaude(now) {
     agents.push({
       id, vendor: 'claude',
       kind: s.entrypoint === 'claude-desktop' ? 'desktop' : 'cli',
+      openUrl: s.entrypoint === 'claude-desktop' && alive ? claudeDesktopLink(s.hostSessionId) : null,
       host: hostOf(s.entrypoint),
       task: s.name || basename(s.cwd), taskRank: s.name ? 2 : 0, cwd: s.cwd, project: projectOf(s.cwd), // the registry's title, else the folder
       model: info?.model || null, branch: info?.gitBranch || null, startedAt: s.startedAt || null, alive,

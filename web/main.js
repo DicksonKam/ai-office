@@ -337,11 +337,18 @@ function closeCard() {
   card.hidden = true; selected = null;
   mgr.threads?.focus?.(null); // done looking: the highlighted lines go with the card (hover still shows them)
 }
+$('cardOpen').addEventListener('click', async () => {
+  const id = selected?.agent?.id, b = $('cardOpen'); if (!id) return;
+  b.disabled = true; b.textContent = 'Opening…';
+  try { const r = await fetch('api/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }); if (!r.ok) throw new Error(String(r.status)); b.disabled = false; refreshCard(); }
+  catch { b.textContent = 'Could not open it'; setTimeout(() => { b.disabled = false; refreshCard(); }, 1800); }
+});
 function refreshCard() {
   const w = selected; if (!w || w.done) { closeCard(); return; }
   const a = w.agent, now = Date.now();
   $('cardDot').style.setProperty('--c', VENDOR[w.look.vendorKey].css);
   setText('cardName', w.name);
+  { const b = $('cardOpen'); b.hidden = !a.open; if (a.open && !b.disabled) setText('cardOpen', a.open.label); }
   setText('cardHost', `${a.host}${a.kind === 'subagent' ? ' · helper' : a.kind === 'guardian' ? ' · reviewer' : ''}${mgr.floors.length > 1 ? ` · ${w.floor + 1}F` : ''}`);
   setText('cardTask', a.task || '—');
   const path = a.cwd || a.project || '';

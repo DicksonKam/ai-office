@@ -289,3 +289,7 @@ A tool, or a small wrapper around it, can report jobs with no change to the offi
 
 To read a tool directly instead, add a reader that returns the same observations to `DEFAULT_JOB_READERS` in `server/model.js`.
 
+## Opening an agent's chat from the office
+
+A reader may give an agent an `openUrl`. `server/open.js` keeps a list of link shapes that were checked by hand to show the chat and change nothing in it, and only those are ever used. The page sends `POST /api/open` with an agent id, never a link; the server looks the link up and runs `open` without a shell, and refuses anything without the office's own Origin. A helper opens the chat of the agent it works for. To add a tool: give its agents an `openUrl`, try the link on an idle chat, confirm its files do not change, then add its shape to the list.
+

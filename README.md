@@ -244,6 +244,7 @@ becomes yours. Hover either name tag to see the line between them.
   for the one below. Walls rise to the underside of the slab above;
   people step up tread by tread. While the floor above is unused, a faint plate marks where the flight arrives.
 - Work that goes on after a turn is shown too: a worker waiting on a background job or a timer rests at their desk with the chair turned to an open laptop, instead of going to the lounge, and does not leave while it runs. Schedules are listed in the Teams panel and on the day board. Any tool can report jobs: see "Jobs from any tool" in AGENT_COMMUNICATION.md.
+- The worker card has an **Open this chat** button where a tool can really be taken to that chat: today, Claude Desktop (a helper opens its lead's chat). It only takes you there; nothing is sent. Agents that cannot be opened simply have no button. Local office only.
 - A chat started by another chat shows it: a `↗ Name` chip on its tag, a desk nearby when one is free, and a line on hover. Two chats merely in the same folder are not linked.
 - The sun is the real sun over the place you set (Hong Kong unless you set `AI_OFFICE_LAT` and `AI_OFFICE_LON`): it moves with the time and the season, and sunrise, sunset and the lamps follow it. After sunset the garden falls slowly through a blue hour while the lamps take over the room. Light
   gets into the building only through its openings, so window-shaped patches cross the floor through the day (the window wall faces
@@ -319,6 +320,7 @@ server/            Node: collectors → snapshot (agents, teams, events) → Web
   links/                 link readers: declared (the open format in LINKS.md, from ~/.ai-office/links), process ancestry; the resolver
   jobbook.js, rrule.js, jobdrop.js   background jobs, timers and schedules from any tool (~/.ai-office/jobs)
   startedby.js           which chat started which
+  open.js                from a worker to its chat: the links known to be safe (the page only ever names an agent)
   model.js               lifecycle, roles, team resolution, event dedupe, idle tracking
   probe.js               `node --no-warnings server/probe.js` prints who is in and recent events
 web/               Browser: Three.js scene
