@@ -110,7 +110,7 @@ function fitCamera(office, immediate = true) {
 function applyFrustum(f) { camera.left = f.left; camera.right = f.right; camera.top = f.top; camera.bottom = f.bottom; camera.updateProjectionMatrix(); }
 
 // Auto-framing: frame the occupied part of the office (fixed angle, smooth zoom / pan); never zoom out past the room.
-let autoZoom = true, focus = null; // focus = { pts: [...], until }
+let autoZoom = false, focus = null; // focus = { pts: [...], until }
 function retarget(immediate = false) {
   const office = mgrRef?.office; if (!office || !fullView) return;
   let f;
@@ -519,13 +519,11 @@ window.addEventListener('keydown', e => { // like the floor pills: a floor switc
 function setPressed(btn, on) { btn.classList.toggle('on', on); btn.setAttribute('aria-pressed', String(on)); if (btn.parentNode?.id === 'morePop') syncMore(); }
 
 // ---- auto zoom toggle ---------------------------------------------------------------
-const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-autoZoom = !reduceMotion;
-try { const z = localStorage.getItem('ai-office-autozoom'); if (z !== null) autoZoom = z !== '0'; } catch { /* ignore */ }
+try { const z = localStorage.getItem('ai-office-autozoom-v2'); if (z !== null) autoZoom = z !== '0'; } catch { /* ignore */ } // off unless you turn it on (a new key: the old one saved the days when it was on by default)
 setPressed($('zoomToggle'), autoZoom);
 function setAutoZoom(v) { // the pill and a double-click on the scene: same toggle, same saved state
   autoZoom = v; focus = null; setPressed($('zoomToggle'), autoZoom);
-  try { localStorage.setItem('ai-office-autozoom', autoZoom ? '1' : '0'); } catch { /* ignore */ }
+  try { localStorage.setItem('ai-office-autozoom-v2', autoZoom ? '1' : '0'); } catch { /* ignore */ }
   retarget();
 }
 $('zoomToggle').addEventListener('click', () => setAutoZoom(!autoZoom));

@@ -95,8 +95,8 @@ npm run install-service
 browser; for a window of its own, Chrome/Edge "Install as app" or Safari "Add to Dock" on <http://localhost:4477>
 works well.
 
-**On screen:** the camera keeps its fixed angle but auto-frames the people who are in (toggle with the
-**Auto-zoom** pill or by double-clicking the scene); click a team in the **Teams** roster to look at that pod for a
+**On screen:** the camera keeps its fixed angle and shows the whole floor; the **Auto-zoom** pill, or a double-click on
+the scene, makes it follow the people who are in; click a team in the **Teams** roster to look at that pod for a
 moment. While the roster runs down the right-hand side, the frame makes room for it. The **Log** pill opens the office log: arrivals, departures, delegations, messages, reports, verdicts and
 finishes, newest first, real events only. In a busy spot, name tags declutter: people in front keep the full tag,
 the others shrink to name + role and stack upward on a thin leader (hover a tag for the full text); someone simply
