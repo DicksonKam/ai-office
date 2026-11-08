@@ -3,3 +3,4 @@ node_modules/
 ._*
 .claude/worktrees/
 data/
+dist-pages/

@@ -114,7 +114,7 @@ export function createAlerts({ demo = false, force = false, nameOf = a => a.nick
   function show(title, body, tag, id = null) {
     if (!active()) return null;
     try {
-      const n = new Notification(title, { body, tag, icon: '/app/icon-192.png', badge: '/app/icon-192.png', silent: true, requireInteraction: false });
+      const n = new Notification(title, { body, tag, icon: 'app/icon-192.png', badge: 'app/icon-192.png', silent: true, requireInteraction: false });
       n.onclick = e => {
         e.preventDefault?.();
         try { window.focus(); } catch { /* ignore */ }

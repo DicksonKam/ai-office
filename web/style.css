@@ -608,3 +608,15 @@ body.night .bubble:not(.ask) { filter: brightness(.88); }
 /* timeline and card-strip marks: a hand-over (⇄, amber-brown) and a launch (▶, slate blue) */
 .mk.hand, #card .cm.hand { --m: #b07a3a; }
 .mk.launch, #card .cm.launch { --m: #5d7798; }
+
+/* the public demo: what this is and where the real thing is; no Alerts, there are no agents of yours here */
+body.hosted #bell { display: none; }
+.hostedNote { position: fixed; z-index: 6; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); box-sizing: border-box;
+  padding: 9px 10px 9px 18px; border-radius: 999px; background: var(--paper); color: var(--ink-soft); font-size: 13px; font-weight: 600; box-shadow: 0 4px 16px rgba(63, 58, 74, .16); }
+.hostedNote a { color: var(--ink); font-weight: 800; white-space: nowrap; text-decoration: none; }
+.hostedNote a:hover { text-decoration: underline; }
+.hostedNote button { border: 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 16px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+body.tl-open .hostedNote { display: none; }
+@media (max-width: 620px) { .hostedNote { border-radius: 16px; left: 12px; right: 12px; transform: none; font-size: 12px; bottom: 12px; } }
+.nogl { position: fixed; inset: 0; z-index: 100; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; font-weight: 600; color: var(--ink); }
+.nogl img { max-width: min(900px, 100%); border-radius: 12px; }

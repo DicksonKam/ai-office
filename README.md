@@ -11,6 +11,8 @@ takes a desk in the lead's pod. Helpers report back in person when they finish, 
 room, and everyone stretches, grabs a coffee and hangs around the lounge for a while when their work is done, then
 leaves.
 
+**Try it in your browser, with nothing to install:** <https://dicksonkam.github.io/ai-office/> plays a demo with made-up work.
+
 It is a real monitor, not a toy: the office only shows agents that actually exist right now, and the hierarchy and
 interactions come from the agents' own logs.
 
@@ -277,6 +279,7 @@ which transforms the parent (it once tilted the whole building).
   first seen and time worked today, their last five real actions with times, their team (click to jump), time in
   the office and the project.
 - `npm test` runs the week-digest, collector, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin and HUD-fit tests.
+- `npm run build:pages` builds that public demo as plain files in `dist-pages/`, with nothing from `server/`; a push to `main` publishes it after the tests pass. It tracks nobody, and if a visitor's machine struggles it gives up detail by itself (`web/autoquality.js`).
 - `npm run smoke` starts the real server with an empty home folder and checks that it comes up, serves the page and refuses other web sites.
 - `npm run synccheck` (Chrome installed) runs the crowd demo from a server, opens two tabs 90 s apart and compares them
   every 15 s: seat, floor, activity and position. It exits 1, naming the differences, if they disagree; `-- --live` compares

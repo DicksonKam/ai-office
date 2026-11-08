@@ -2,7 +2,7 @@
 // frame rate (the slowest 1% of frames), draw calls, triangles, floors and people, refreshed every second; once a
 // minute (and 15 s after load) the same numbers go to the local server (POST /api/perf, kept in memory only), so a visit
 // in your own browser leaves numbers that can be read back with GET /api/perf. Nothing of this runs without ?perf.
-export function startPerf({ renderer, mgr, demo = false }) {
+export function startPerf({ renderer, mgr, demo = false, post = true }) {
   const el = document.createElement('div');
   el.id = 'perfReadout';
   el.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:50;padding:6px 10px;border-radius:10px;font:12px/1.4 ui-monospace,Menlo,monospace;' +
@@ -23,7 +23,7 @@ export function startPerf({ renderer, mgr, demo = false }) {
     if (now - shownAt > 1000) {
       shownAt = now; const s = stats();
       el.textContent = s ? `${s.fps} fps · ${s.medianMs} ms median · 1% low ${s.low1Fps} fps\n${s.calls} draws · ${(s.triangles / 1000).toFixed(0)}k tris · ${s.floors} floor${s.floors > 1 ? 's' : ''} · ${s.people} people` : 'measuring…';
-      if (s && !document.hidden && now - sentAt > 60000) {
+      if (post && s && !document.hidden && now - sentAt > 60000) {
         sentAt = now;
         fetch('/api/perf', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...s, ua: navigator.userAgent.slice(0, 160) }) }).catch(() => {});
       }

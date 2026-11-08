@@ -3,17 +3,17 @@
   "name": "AI Office",
   "short_name": "AI Office",
   "description": "A cozy 3D office where your running Claude Code, Codex, Cursor and Gemini CLI agents work as chibi teammates, and raise a hand when one is waiting on you.",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "../",
+  "scope": "../",
   "display": "standalone",
   "background_color": "#faf5ee",
   "theme_color": "#faf5ee",
   "categories": ["developer", "productivity", "utilities"],
   "icons": [
-    { "src": "/app/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
-    { "src": "/app/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
-    { "src": "/app/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
-    { "src": "/app/icon-maskable.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" },
-    { "src": "/app/icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-maskable.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ]
 }

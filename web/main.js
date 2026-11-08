@@ -12,8 +12,17 @@ import { startDemo, startCrowdDemo } from './demo.js';
 import { Director, LAYOUT } from './director.js';
 import { createAlerts } from './app/notify.js';
 import { planHud, SECONDARY } from './hudfit.js';
+import { createQualityStepper } from './autoquality.js';
 
 const canvas = document.getElementById('scene');
+// the public copy of the demo (scripts/build-pages.mjs marks it): no server behind it, and strangers' machines in front of it
+const hosted = !!document.querySelector('meta[name="ai-office-hosted"]');
+if (!document.createElement('canvas').getContext('webgl2')) {
+  const box = document.createElement('div'); box.className = 'nogl';
+  box.innerHTML = `<p>The office is drawn with WebGL 2, which this browser has turned off or does not have.</p>${hosted ? '<img src="office.webp" alt="Workers walking into the office and sitting down at their desks">' : ''}`;
+  document.body.appendChild(box);
+  throw new Error('no WebGL 2');
+}
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.VSMShadowMap;
@@ -35,6 +44,9 @@ const shadowLight = (color, intensity, shade) => {
   scene.add(L, L.target); return L;
 };
 const sun = shadowLight(0xfff1dd, 1, 0.85), room = shadowLight(0xfff4e6, 1.3, 0.8);
+// the public demo gives up detail, least-missed first, if the visitor's machine is struggling (the local office never does)
+const pixelSteps = [1.5, 1, 0.75].filter(r => r < renderer.getPixelRatio()).map(r => () => renderer.setPixelRatio(r));
+const quality = hosted ? createQualityStepper({ steps: [...pixelSteps.slice(0, -1), () => { sun.castShadow = room.castShadow = false; }, ...pixelSteps.slice(-1)] }) : null;
 sun.shadow.radius = 3; sun.shadow.blurSamples = 8;
 room.shadow.radius = 3; room.shadow.blurSamples = 8;
 room.shadow.autoUpdate = false;
@@ -683,7 +695,7 @@ morePop.addEventListener('click', syncMore); // runs after the pill's own handle
 
 // ---- data -------------------------------------------------------------------------
 const params = _q;
-const isDemo = params.has('demo');
+const isDemo = hosted || params.has('demo');
 // dock badge, "(N)" in the title and the opt-in alerts bell (app/notify.js)
 const alerts = createAlerts({
   demo: isDemo, force: params.has('notify'),
@@ -872,6 +884,13 @@ function setOffline(on) {
   alerts.setOffline?.(on);
 }
 
+if (hosted) {
+  document.body.classList.add('hosted');
+  const note = document.createElement('div'); note.className = 'hostedNote';
+  note.innerHTML = '<span>A made-up demo. Run it on your own machine to watch your real AI agents.</span> <a href="https://github.com/DicksonKam/ai-office" target="_blank" rel="noopener">See how →</a><button type="button" aria-label="Close">×</button>';
+  note.querySelector('button').addEventListener('click', () => note.remove());
+  document.body.appendChild(note);
+}
 if (isDemo) {
   setConn('●', 'demo'); if (params.has('crowd')) startCrowdDemo(onSnapshot, Number(params.get('crowd')) || 24, { reviewers: params.has('reviewers') }); else startDemo(onSnapshot, { scene: params.get('demo') || null });
 } else {
@@ -985,11 +1004,11 @@ if (isDemo) {
       avail: hud.clientWidth,
       gap: parseFloat(getComputedStyle(legend).columnGap) || 0,
       hudGap: parseFloat(getComputedStyle(hud).columnGap) || 0,
-      title: { natural: widthOf(title), min: TITLE_MIN },
+      title: { natural: widthOf(title), min: hosted && hud.clientWidth < 520 ? Infinity : TITLE_MIN }, // the public demo has no Alerts pill: on a phone the card must still get its own row
       w: {
         floors: widthOf(floors), floorsCompact: widthOf(floors, 'fl-compact'),
         key: widthOf(pills.key), zoom: widthOf(pills.zoom), teams: widthOf(pills.teams), log: widthOf(pills.log), more: widthOf(moreBtn),
-        today: widthOf($('todayToggle')), bell: widthOf(bell), bellIcon: widthOf(bell, 'bell-ic'), conn: widthOf(conn), connIcon: widthOf(conn, 'conn-ic'),
+        today: widthOf($('todayToggle')), bell: hosted ? 0 : widthOf(bell), bellIcon: hosted ? 0 : widthOf(bell, 'bell-ic'), conn: widthOf(conn), connIcon: widthOf(conn, 'conn-ic'),
       },
     }));
     edges();
@@ -1023,6 +1042,7 @@ const SUB_DT = 0.05, GAP_S = 5, GAP_SIM_S = 30, GAP_DT = 0.1, HIDDEN_DT = 0.25;
 let last = performance.now(), hudT = 0;
 function step(now, coarse = false) {
   let dt = (now - last) / 1000; last = now;
+  if (!document.hidden) quality?.tick(dt * 1000); // the page's own pause while hidden says nothing about the machine
   if (!(dt > 0)) return;
   const gap = dt > GAP_S;
   if (gap) dt = Math.min(dt, GAP_SIM_S);
@@ -1094,5 +1114,5 @@ import('./dayboard.js').then(m => m.startDayBoard?.({ mgr, demo: isDemo })).catc
 import('./timeline.js').then(m => { timelineMod = m; m.startTimeline?.({ mgr, demo: isDemo, lookAtWorker, showCard }); }).catch(err => console.warn('timeline:', err));
 import('./sound.js').then(m => m.startSound?.({ mgr, demo: isDemo })).catch(err => console.warn('sound:', err));
 import('./seasons.js').then(m => m.decorate?.({ mgr, date: new Date(), params: _q })).catch(err => console.warn('seasons:', err)); // Halloween, winter, Lunar New Year, Mid-Autumn by the real date (?season= to check)
-if (_q.has('perf')) import('./perf.js').then(m => m.startPerf?.({ renderer, mgr, demo: isDemo })).catch(err => console.warn('perf:', err)); // ?perf: frame-time readout, numbers to /api/perf
+if (_q.has('perf')) import('./perf.js').then(m => m.startPerf?.({ renderer, mgr, demo: isDemo, post: !hosted })).catch(err => console.warn('perf:', err)); // ?perf: frame-time readout, numbers to /api/perf
 if (_q.has('soak')) import('./soak.js').then(m => m.startSoak?.({ mgr, params: _q })).catch(err => console.warn('soak:', err)); // ?soak: the long-run anomaly monitor (web/soak.js); ?soak&report opens its report
