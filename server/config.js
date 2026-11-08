@@ -66,6 +66,7 @@ export const CONFIG = {
   leaveAfterIdleMs: 6 * 60 * 1000,  // idle this long => the worker leaves the office
   askEscalateMs: 3 * 60 * 1000,     // an ask addressed to the agent that gave the work becomes yours once that agent has stopped working this long
   helperLeaveAfterIdleMs: 90 * 1000, // subagents / reviewers hang around less (a Codex helper thread only once closed or its lead's turn is over)
+  headlessQuietMs: 30 * 1000,       // a program's headless run with no transcript is taken for a quick question until it has run this long
   admitMinMs: 30 * 1000,            // a worker first seen idle with less than this of its break left is not shown at all (no 1 s arrive / leave pair)
   tailBytes: 256 * 1024,            // how much of each log file to read from the end
 

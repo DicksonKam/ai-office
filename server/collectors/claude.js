@@ -354,8 +354,9 @@ function modelReplying(info, now, gapMs = REPLY_GAP_MS) {
 }
 
 /** A program asking Claude Code one quick question (a menu-bar app's `claude -p /usage` every minute) is registered like a
- *  chat, but a headless run that keeps no transcript has done no work anyone could watch: it is not a worker. */
-export const isHeadlessWithoutRecord = (entrypoint, transcript) => !transcript && String(entrypoint || '').includes('sdk');
+ *  chat. A headless run with no transcript is taken for that while it is young; one still going later is really working,
+ *  so it comes in, with nothing to show of its thoughts. */
+export const isQuickHeadlessRun = (entrypoint, transcript, ageMs) => !transcript && String(entrypoint || '').includes('sdk') && ageMs < CONFIG.headlessQuietMs;
 
 function hostOf(entrypoint) {
   if (!entrypoint) return 'Claude Code';
@@ -475,7 +476,7 @@ export async function collectClaude(now) {
     const alive = isPidAlive(s.pid);
     seen.add(s.sessionId);
     const transcript = await findTranscript(s.cwd, s.sessionId, now);
-    if (isHeadlessWithoutRecord(s.entrypoint, transcript)) continue;
+    if (isQuickHeadlessRun(s.entrypoint, transcript, s.startedAt ? now - s.startedAt : Infinity)) continue;
     const info = transcript ? await transcriptInfo(transcript, now) : null;
     const transcriptActive = info && now - info.activeAt < CONFIG.idleAfterMs;
     const asking = alive ? askingFor(info, s.status, now) : null;

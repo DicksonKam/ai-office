@@ -2,6 +2,7 @@
 // what failed, if it does not come up, serve the page, or refuse another web site. Touches nothing of a running office.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +10,7 @@ import { WebSocket } from 'ws';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-smoke-'));
-const port = 4400 + Math.floor(Math.random() * 90), base = `http://localhost:${port}`;
+const port = await new Promise(r => { const t = net.createServer().listen(0, '127.0.0.1', () => { const p = t.address().port; t.close(() => r(p)); }); }), base = `http://localhost:${port}`; // a port nothing is using: not the running office's
 let log = '';
 const server = spawn(process.execPath, ['--no-warnings', 'server/index.js'], { cwd: ROOT, env: { ...process.env, HOME: home, AI_OFFICE_PORT: String(port), AI_OFFICE_DATA_DIR: path.join(home, 'data') } });
 server.stdout.on('data', d => { log += d; });

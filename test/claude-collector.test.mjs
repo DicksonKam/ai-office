@@ -261,12 +261,26 @@ test('a session keeps its title when the leaving path only knows its first promp
   assert.equal('taskRank' in snap.agents.find(a => a.id === id), false, 'the rank is not a snapshot field');
 });
 
-test('a headless run that keeps no transcript is not a worker; a chat or a recorded run is', async () => {
-  const { isHeadlessWithoutRecord: no } = await import('../server/collectors/claude.js');
-  assert.ok(no('sdk-cli', null), 'a program asking one quick question');
-  assert.ok(!no('sdk-cli', '/x/run.jsonl'), 'a headless run that really works keeps a transcript');
-  assert.ok(!no('claude-desktop', null), 'a chat just opened has no transcript yet');
-  assert.ok(!no('cli', null));
-  assert.ok(!no(undefined, null));
+test('a program\'s run with no transcript is a quick question while young, and a worker once it has kept going', async () => {
+  const { isQuickHeadlessRun: quick } = await import('../server/collectors/claude.js');
+  const SEC = 1000;
+  assert.ok(quick('sdk-cli', null, 5 * SEC), 'a menu-bar app asking for usage');
+  assert.ok(!quick('sdk-cli', null, 45 * SEC), 'still going: really working');
+  assert.ok(!quick('sdk-cli', null, Infinity), 'no start time: do not hide it');
+  assert.ok(!quick('sdk-cli', '/x/run.jsonl', 5 * SEC), 'keeps a transcript');
+  assert.ok(!quick('claude-desktop', null, 5 * SEC), 'a chat just opened has no transcript yet');
+  assert.ok(!quick('cli', null, 5 * SEC));
+  assert.ok(!quick(undefined, null, 5 * SEC));
 });
 
+test('from the registry: a young headless run with no transcript stays out, an older one comes in', async () => {
+  const run = async ageMs => {
+    const o = office(), now = Date.now(), sessionId = `headless-${++n}`;
+    write(path.join(o.sessionsDir, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId, cwd: CWD, entrypoint: 'sdk-cli', name: 'a nightly job', status: 'busy', startedAt: now - ageMs }));
+    return (await collectClaude(now)).find(a => a.id === `claude:${sessionId}`);
+  };
+  assert.equal(await run(5 * SEC), undefined, 'a quick question');
+  const worker = await run(60 * SEC);
+  assert.ok(worker, 'still going after a minute');
+  assert.equal(worker.status, 'working'); assert.equal(worker.task, 'a nightly job'); assert.equal(worker.thought, null);
+});
