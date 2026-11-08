@@ -353,6 +353,10 @@ function modelReplying(info, now, gapMs = REPLY_GAP_MS) {
   return !!(info?.awaitingModel && !TERMINAL_TOOLS.has(info.lastToolName) && now - info.activeAt < gapMs);
 }
 
+/** A program asking Claude Code one quick question (a menu-bar app's `claude -p /usage` every minute) is registered like a
+ *  chat, but a headless run that keeps no transcript has done no work anyone could watch: it is not a worker. */
+export const isHeadlessWithoutRecord = (entrypoint, transcript) => !transcript && String(entrypoint || '').includes('sdk');
+
 function hostOf(entrypoint) {
   if (!entrypoint) return 'Claude Code';
   if (entrypoint.includes('desktop')) return 'Claude Desktop';
@@ -471,6 +475,7 @@ export async function collectClaude(now) {
     const alive = isPidAlive(s.pid);
     seen.add(s.sessionId);
     const transcript = await findTranscript(s.cwd, s.sessionId, now);
+    if (isHeadlessWithoutRecord(s.entrypoint, transcript)) continue;
     const info = transcript ? await transcriptInfo(transcript, now) : null;
     const transcriptActive = info && now - info.activeAt < CONFIG.idleAfterMs;
     const asking = alive ? askingFor(info, s.status, now) : null;

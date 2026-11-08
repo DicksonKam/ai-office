@@ -260,3 +260,13 @@ test('a session keeps its title when the leaving path only knows its first promp
   const snap = await snapshotWith(fake([worker(id, { task: 'x', taskRank: 0 })]))(t);
   assert.equal('taskRank' in snap.agents.find(a => a.id === id), false, 'the rank is not a snapshot field');
 });
+
+test('a headless run that keeps no transcript is not a worker; a chat or a recorded run is', async () => {
+  const { isHeadlessWithoutRecord: no } = await import('../server/collectors/claude.js');
+  assert.ok(no('sdk-cli', null), 'a program asking one quick question');
+  assert.ok(!no('sdk-cli', '/x/run.jsonl'), 'a headless run that really works keeps a transcript');
+  assert.ok(!no('claude-desktop', null), 'a chat just opened has no transcript yet');
+  assert.ok(!no('cli', null));
+  assert.ok(!no(undefined, null));
+});
+
