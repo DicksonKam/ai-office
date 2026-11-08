@@ -230,6 +230,8 @@ test('collectCodex: opening a chat is not work: no empty reviewer, no worker for
     row('real-guard', GUARD, 'guardian_review', [meta(at - 4 * SEC), opened(at - 4 * SEC), ev(at - 3 * SEC, { type: 'task_started', started_at: (at - 3 * SEC) / 1000 })], at - 3 * SEC),
     // an old chat, finished days ago, opened two seconds ago
     row(UUID(1), 'vscode', 'user', [ev(at - 3 * 24 * 3600 * SEC, { type: 'task_complete', completed_at: (at - 3 * 24 * 3600 * SEC) / 1000 }), opened(at - 2 * SEC)], at - 2 * SEC),
+    // the time moved in Codex's database with nothing written to the chat at all
+    row(UUID(3), 'vscode', 'user', [ev(at - 3 * 24 * 3600 * SEC, { type: 'task_complete', completed_at: (at - 3 * 24 * 3600 * SEC) / 1000 })], at - 2 * SEC),
     // the note just before a real turn must not hide it
     row(UUID(2), 'vscode', 'user', [opened(at - 3 * SEC), ev(at - 2 * SEC, { type: 'task_started', started_at: (at - 2 * SEC) / 1000 })], at - 2 * SEC),
   ]);
@@ -237,6 +239,7 @@ test('collectCodex: opening a chat is not work: no empty reviewer, no worker for
   assert.equal(by('empty-guard'), undefined, 'an empty reviewer is nobody');
   assert.equal(by('real-guard')?.status, 'working', 'a review that started counts');
   assert.equal(by(UUID(1)), undefined, 'a chat only looked at does not walk in');
+  assert.equal(by(UUID(3)), undefined, 'a moved time with no new record is not activity');
   assert.equal(by(UUID(2))?.status, 'working', 'a chat really working');
   assert.match(by(UUID(2)).openUrl, /^codex:\/\/threads\//);
   assert.equal(by('real-guard').openUrl, null, 'a reviewer opens its lead instead');

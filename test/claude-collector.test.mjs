@@ -284,3 +284,13 @@ test('from the registry: a young headless run with no transcript stays out, an o
   assert.ok(worker, 'still going after a minute');
   assert.equal(worker.status, 'working'); assert.equal(worker.task, 'a nightly job'); assert.equal(worker.thought, null);
 });
+
+test('a chat merely opened again counts from its last real work, not from being opened', async () => {
+  const o = office(), now = Date.now(), old = now - 3 * 24 * 3600 * SEC;
+  const l = lead(o, { registry: { status: 'idle', statusUpdatedAt: now - 2 * SEC, updatedAt: now - 2 * SEC, startedAt: now - 2 * SEC }, lines: s => [prompt(old - 60 * SEC, s, CWD, 'Fix it'), say(old, s, CWD, 'Done.')] });
+  const a = (await collectClaude(now)).find(x => x.id === l.id);
+  assert.ok(a, 'it is registered'); assert.equal(a.status, 'idle');
+  assert.ok(now - a.statusAt > 24 * 3600 * SEC, 'its idle time runs from the old work');
+  assert.ok(now - a.lastActivityAt > 24 * 3600 * SEC);
+});
+

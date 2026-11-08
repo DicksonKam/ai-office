@@ -488,6 +488,8 @@ export async function collectClaude(now) {
     const busy = turn ? turn.status === 'working'
       : s.status === 'busy' || transcriptActive || !!asking || (alive && s.status !== 'idle' && toolOpen(info, asking, now));
     const statusAt = s.statusUpdatedAt || s.updatedAt || s.startedAt || now;
+    // an old chat merely opened again registers a fresh time: if it is doing nothing, its last real work is what counts
+    const idleFrom = !busy && info?.activeAt ? (info.turnEndAt || info.activeAt) : null;
     agents.push({
       id, vendor: 'claude',
       kind: s.entrypoint === 'claude-desktop' ? 'desktop' : 'cli',
@@ -496,8 +498,8 @@ export async function collectClaude(now) {
       task: s.name || basename(s.cwd), taskRank: s.name ? 2 : 0, cwd: s.cwd, project: projectOf(s.cwd), // the registry's title, else the folder
       model: info?.model || null, branch: info?.gitBranch || null, startedAt: s.startedAt || null, alive,
       status: !alive ? 'gone' : busy ? 'working' : 'idle',
-      statusAt: turn && !busy ? (info.turnEndAt || info.activeAt) : transcriptActive ? info.activeAt : statusAt,
-      lastActivityAt: Math.max(statusAt, info?.activeAt || 0),
+      statusAt: idleFrom ?? (turn && !busy ? (info.turnEndAt || info.activeAt) : transcriptActive ? info.activeAt : statusAt),
+      lastActivityAt: idleFrom ?? Math.max(statusAt, info?.activeAt || 0),
       thought: info?.thought || null, parentId: null, waiting: turn ? turn.waiting : !!(busy && info?.waiting), asking, events: [],
       pid: alive && Number.isInteger(s.pid) && s.pid > 0 ? s.pid : null, touches: info?.touches || [], jobObs: info?.jobs, startCalls: info?.sessionStarts, hostId: s.hostSessionId || null, // the registry names the process
     });

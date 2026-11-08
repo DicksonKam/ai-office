@@ -379,8 +379,8 @@ export async function collectCodex(now) {
     const info = r.rollout_path ? await rolloutInfo(r.rollout_path, now) : null;
     // Codex prepares an empty reviewer when a chat is opened (a setup note and no more): one that never started is nobody
     if (isGuardian && !info?.turn) continue;
-    // a chat only looked at: its file and its time moved, but its last work is what counts
-    const lastActivity = info?.endsOnOpening ? (info.workTs || 0) : Math.max(r.updated_at_ms || 0, info?.mtimeMs || 0);
+    // a chat is judged by its newest real record: Codex moves a thread's time, and adds its note, without any work happening
+    const lastActivity = info?.workTs ?? Math.max(r.updated_at_ms || 0, info?.mtimeMs || 0);
     let status, statusAt;
     if (info?.turn === 'working') {
       status = now - lastActivity < CONFIG.activeWindowMs ? 'working' : 'idle';

@@ -281,6 +281,7 @@ which transforms the parent (it once tilted the whole building).
   the office and the project.
 - `npm test` runs the week-digest, collector, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin and HUD-fit tests.
 - `npm run build:pages` builds that public demo as plain files in `dist-pages/`, with nothing from `server/`; a push to `main` publishes it after the tests pass. It tracks nobody, and if a visitor's machine struggles it gives up detail by itself (`web/autoquality.js`).
+- `npm run audit` compares the day journal with what the agents' own records say happened (Claude Code and Codex): false workers, missed work, how late the office noticed, and "waiting on you" that was wrong or missing. It reads times and record types only, and runs no AI. `-- --by-day` splits it.
 - `npm run smoke` starts the real server with an empty home folder and checks that it comes up, serves the page and refuses other web sites.
 - `npm run synccheck` (Chrome installed) runs the crowd demo from a server, opens two tabs 90 s apart and compares them
   every 15 s: seat, floor, activity and position. It exits 1, naming the differences, if they disagree; `-- --live` compares

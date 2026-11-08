@@ -71,6 +71,20 @@ export function dayStart(date, timeZone = CONFIG.journal.timeZone) {
 const clip = (s, n) => (s == null ? null : (s = String(s).replace(/\s+/g, ' ').trim()).length > n ? s.slice(0, n - 1) + '…' : s);
 
 /** Parse journal text; tolerant of a torn last line or junk. */
+/** A session that came and went within seconds with nothing to show for it (a program asking one quick question) is not part
+ *  of anyone's day. The office no longer lets them in, but the journals from before that still hold thousands. */
+const BLIP_KINDS = new Set(['arrived', 'working', 'idle', 'left']);
+export function withoutBlips(entries, ms = 15000) {
+  const byId = new Map();
+  for (const e of entries) if (e.id) (byId.get(e.id) || byId.set(e.id, []).get(e.id)).push(e);
+  const drop = new Set();
+  for (const [id, rows] of byId) {
+    const times = rows.map(r => r.t);
+    if (rows.some(r => r.kind === 'arrived') && rows.some(r => r.kind === 'left') && rows.every(r => BLIP_KINDS.has(r.kind)) && Math.max(...times) - Math.min(...times) < ms) drop.add(id);
+  }
+  return drop.size ? entries.filter(e => !drop.has(e.id)) : entries;
+}
+
 export function parseEntries(txt) {
   const out = [];
   for (const line of String(txt).split('\n')) {
@@ -84,7 +98,7 @@ export function parseEntries(txt) {
 export function readEntries(file) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch { return []; }
-  return parseEntries(txt);
+  return withoutBlips(parseEntries(txt));
 }
 
 /** Incrementally re-read a growing file (only the new bytes since the last call). */
@@ -107,6 +121,7 @@ class FileCache {
         if (!line) continue;
         try { const e = JSON.parse(line); if (e && typeof e.t === 'number' && e.kind) this.entries.push(e); } catch { /* skip */ }
       }
+      this.entries = withoutBlips(this.entries);
       this.version++;
     } catch { /* unreadable right now: serve what we have */ } finally { if (fd != null) try { fs.closeSync(fd); } catch { /* */ } }
     return this;
@@ -340,7 +355,7 @@ export class Journal {
       if (c && c.key === key) return c.value;
     }
     let entries = [];
-    try { entries = parseEntries(await fsp.readFile(file, 'utf8')); } catch { /* vanished or unreadable: an empty day */ }
+    try { entries = withoutBlips(parseEntries(await fsp.readFile(file, 'utf8'))); } catch { /* vanished or unreadable: an empty day */ }
     const value = summarizeDay(date, entries, opts);
     if (date === today) this.todayDigest = { date, at: now, value };
     else {

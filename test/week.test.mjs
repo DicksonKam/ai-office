@@ -241,3 +241,16 @@ test('journal lines that fail to write (drive away) are held and written, in ord
   assert.deepEqual(lines, [1, 2, 3], 'held lines first, in order');
   assert.match(errors.at(-1), /writing again/);
 });
+
+test('a session that came and went within seconds is left out of the day; a short real one with an event is not', async () => {
+  const { withoutBlips } = await import('../server/journal.js');
+  const T = 1_000_000;
+  const rows = [
+    { t: T, kind: 'arrived', id: 'quick' }, { t: T + 3000, kind: 'working', id: 'quick' }, { t: T + 5000, kind: 'left', id: 'quick' },
+    { t: T, kind: 'arrived', id: 'stayed' }, { t: T + 60000, kind: 'left', id: 'stayed' },
+    { t: T, kind: 'arrived', id: 'asked' }, { t: T + 1000, kind: 'asking-start', id: 'asked' }, { t: T + 5000, kind: 'left', id: 'asked' },
+    { t: T, kind: 'arrived', id: 'still-in' },
+  ];
+  assert.deepEqual([...new Set(withoutBlips(rows).map(r => r.id))], ['stayed', 'asked', 'still-in']);
+});
+
