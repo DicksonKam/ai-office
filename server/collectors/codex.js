@@ -5,6 +5,7 @@
 import { open, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { codexThreadLink } from '../open.js';
 import { CONFIG } from '../config.js';
 import { readTail, parseJsonl, snippet, basename, SeenMap, every } from '../tail.js';
 import { readdir, readFile } from 'node:fs/promises';
@@ -52,10 +53,13 @@ let DatabaseSync = null;
 const tailCache = new SeenMap(); // rollout path -> { mtimeMs, size, info }; unused for an hour => dropped
 const pruneCaches = every(60 * 1000, now => tailCache.prune(now));
 
+let dbPath = null;
 async function getDb() {
-  if (db) return db;
+  if (db && dbPath === CONFIG.codex.stateDb) return db;
+  if (db) { try { db.close(); } catch { /* ignore */ } db = null; }
   if (!DatabaseSync) ({ DatabaseSync } = await import('node:sqlite'));
   db = new DatabaseSync(CONFIG.codex.stateDb, { readOnly: true });
+  dbPath = CONFIG.codex.stateDb;
   return db;
 }
 
@@ -132,6 +136,10 @@ export function extractFromLines(lines) {
     const ts = Date.parse(l.timestamp) || 0;
     if (!info.lastTs) info.lastTs = ts;
     const p = l.payload || {};
+    // Codex writes this note just for having opened a thread. It is not work, so it does not count as activity.
+    const opened = l.type === 'event_msg' && p.type === 'thread_settings_applied';
+    if (i === lines.length - 1) info.endsOnOpening = opened;
+    if (!opened && !info.workTs) info.workTs = ts;
     if (!info.approvalsReviewer) {
       const st = l.type === 'turn_context' ? p : p.type === 'thread_settings_applied' ? p.thread_settings || {} : null;
       if (st && (st.approvals_reviewer || st.approval_policy)) { info.approvalsReviewer = st.approvals_reviewer || null; info.approvalPolicy = st.approval_policy || null; }
@@ -369,7 +377,10 @@ export async function collectCodex(now) {
     if (['avatar_quick_chat', 'onboarding_checklist', 'voice_chat'].includes(r.thread_source)) continue;
 
     const info = r.rollout_path ? await rolloutInfo(r.rollout_path, now) : null;
-    const lastActivity = Math.max(r.updated_at_ms || 0, info?.mtimeMs || 0);
+    // Codex prepares an empty reviewer when a chat is opened (a setup note and no more): one that never started is nobody
+    if (isGuardian && !info?.turn) continue;
+    // a chat only looked at: its file and its time moved, but its last work is what counts
+    const lastActivity = info?.endsOnOpening ? (info.workTs || 0) : Math.max(r.updated_at_ms || 0, info?.mtimeMs || 0);
     let status, statusAt;
     if (info?.turn === 'working') {
       status = now - lastActivity < CONFIG.activeWindowMs ? 'working' : 'idle';
@@ -410,6 +421,7 @@ export async function collectCodex(now) {
 
     agents.push({
       id, vendor: 'codex', kind, host: hostOf(r.originator, r.source), nickname,
+      openUrl: !isGuardian && !isSub && /desktop/i.test(r.originator || '') ? codexThreadLink(r.id) : null,
       task: isGuardian ? 'Guardian review'
         : isSub ? `Helper: ${humanize((agentPath || '').split('/').filter(Boolean).pop()) || r.title || 'side task'}`
         : (r.name || r.title || snippet(r.first_user_message || r.preview, 60) || basename(r.cwd)),

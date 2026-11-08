@@ -5,10 +5,12 @@ import { execFile } from 'node:child_process';
 
 const SAFE_LINKS = [
   /^claude:\/\/code\/continue\?session=local_[A-Za-z0-9-]{1,64}$/, // Claude Desktop goes to that chat; nothing is written to it
+  /^codex:\/\/threads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, // Codex opens the thread: it notes that, as when you click it there, and sends nothing
 ];
 export const isSafeLink = url => typeof url === 'string' && SAFE_LINKS.some(re => re.test(url));
 
 /** Claude Desktop's own id for a chat (`local_…`) is what its link wants. */
+export const codexThreadLink = id => (typeof id === 'string' ? `codex://threads/${id}` : null);
 export const claudeDesktopLink = hostId => (typeof hostId === 'string' ? `claude://code/continue?session=${hostId}` : null);
 
 /** Who can be opened, and how. A helper has no chat of its own, so it opens the one it works for. Removes each `openUrl`

@@ -215,3 +215,30 @@ test('collectCodex: a lead mid long turn, its reviewer held after a 2 s review, 
     assert.ok(snap.agents.some(a => a.id === 'codex:gauss1'));
   } finally { CONFIG.tailBytes = saved; }
 });
+
+test('collectCodex: opening a chat is not work: no empty reviewer, no worker for a chat only looked at', async () => {
+  const dir = tmp(), at = Date.now();
+  const rollout = (name, lines) => { const f = path.join(dir, `rollout-${name}.jsonl`); fs.writeFileSync(f, jsonl(lines)); return f; };
+  const ev = (t, payload) => ({ timestamp: new Date(t).toISOString(), type: 'event_msg', payload });
+  const opened = t => ev(t, { type: 'thread_settings_applied', thread_settings: { model: 'x' } });
+  const meta = t => ({ timestamp: new Date(t).toISOString(), type: 'session_meta', payload: { id: 'm' } });
+  const GUARD = '{"subagent":{"other":"guardian"}}', UUID = n => `aaaaaaaa-bbbb-4ccc-8ddd-00000000000${n}`;
+  const row = (id, source, thread_source, lines, updated, extra = {}) => ({ id, thread_source, source, title: 'T', created_at_ms: at - 3 * 3600 * SEC, updated_at_ms: updated, originator: 'Codex Desktop', rollout_path: rollout(id, lines), ...extra });
+  CONFIG.codex.stateDb = stateDb(dir, [
+    // the same three records Codex writes for a chat just opened
+    row('empty-guard', GUARD, 'guardian_review', [meta(at - 2 * SEC), { timestamp: new Date(at - 2 * SEC).toISOString(), type: 'response_item', payload: { type: 'compaction' } }, opened(at - 2 * SEC)], at - 2 * SEC),
+    row('real-guard', GUARD, 'guardian_review', [meta(at - 4 * SEC), opened(at - 4 * SEC), ev(at - 3 * SEC, { type: 'task_started', started_at: (at - 3 * SEC) / 1000 })], at - 3 * SEC),
+    // an old chat, finished days ago, opened two seconds ago
+    row(UUID(1), 'vscode', 'user', [ev(at - 3 * 24 * 3600 * SEC, { type: 'task_complete', completed_at: (at - 3 * 24 * 3600 * SEC) / 1000 }), opened(at - 2 * SEC)], at - 2 * SEC),
+    // the note just before a real turn must not hide it
+    row(UUID(2), 'vscode', 'user', [opened(at - 3 * SEC), ev(at - 2 * SEC, { type: 'task_started', started_at: (at - 2 * SEC) / 1000 })], at - 2 * SEC),
+  ]);
+  const agents = await collectCodex(at), by = id => agents.find(a => a.id === `codex:${id}`);
+  assert.equal(by('empty-guard'), undefined, 'an empty reviewer is nobody');
+  assert.equal(by('real-guard')?.status, 'working', 'a review that started counts');
+  assert.equal(by(UUID(1)), undefined, 'a chat only looked at does not walk in');
+  assert.equal(by(UUID(2))?.status, 'working', 'a chat really working');
+  assert.match(by(UUID(2)).openUrl, /^codex:\/\/threads\//);
+  assert.equal(by('real-guard').openUrl, null, 'a reviewer opens its lead instead');
+});
+

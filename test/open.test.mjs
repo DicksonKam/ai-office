@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafeLink, claudeDesktopLink, resolveOpens, openLink } from '../server/open.js';
+import { isSafeLink, claudeDesktopLink, codexThreadLink, resolveOpens, openLink } from '../server/open.js';
 
 const CHAT = claudeDesktopLink('local_11111111-2222-4333-8444-555555555555');
 
@@ -8,6 +8,11 @@ test('only the known shape of link is allowed', () => {
   assert.ok(isSafeLink(CHAT));
   for (const bad of ['https://evil.example', 'file:///etc/passwd', 'claude://code/new?prompt=rm', `${CHAT}&prompt=hello`, 'claude://code/continue?session=last',
     'claude://code/continue?session=local_a b', 'claude://code/continue?session=local_a%0a', '', null, 42]) assert.ok(!isSafeLink(bad), String(bad));
+});
+
+test('a Codex thread link: a real thread id only', () => {
+  assert.ok(isSafeLink(codexThreadLink('aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')));
+  for (const bad of ['new', 'abc', 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee?prompt=hello', '../settings']) assert.ok(!isSafeLink(codexThreadLink(bad)), bad);
 });
 
 test('an id that smuggles more into the link is refused', () => {
