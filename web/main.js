@@ -342,18 +342,35 @@ function closeCard() {
   card.hidden = true; selected = null;
   mgr.threads?.focus?.(null); // done looking: the highlighted lines go with the card (hover still shows them)
 }
+/** the worker's own chat (Claude Desktop, Codex): the page names the agent, the server knows the link */
+async function openChat(id) {
+  const r = await fetch('api/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+  if (!r.ok) throw new Error(String(r.status));
+}
+/** what can be opened for a worker: live, its own; in a film, only someone still in the office now */
+const openFor = a => (player.active ? liveSnap?.agents.find(x => x.id === a.id)?.open : a.open) || null;
 $('cardOpen').addEventListener('click', async () => {
   const id = selected?.agent?.id, b = $('cardOpen'); if (!id) return;
   b.disabled = true; b.textContent = 'Opening…';
-  try { const r = await fetch('api/open', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }); if (!r.ok) throw new Error(String(r.status)); b.disabled = false; refreshCard(); }
+  try { await openChat(id); b.disabled = false; refreshCard(); }
   catch { b.textContent = 'Could not open it'; setTimeout(() => { b.disabled = false; refreshCard(); }, 1800); }
 });
+overlay.chat = {
+  can: w => openFor(w.agent),
+  async open(w, btn) {
+    if (btn.disabled) return;
+    btn.disabled = true; btn.classList.add('busy');
+    try { await openChat(w.agent.id); btn.classList.remove('busy'); }
+    catch { btn.classList.replace('busy', 'bad'); btn.title = 'Could not open it'; setTimeout(() => { btn.classList.remove('bad'); btn.title = openFor(w.agent)?.label || ''; }, 1800); }
+    finally { btn.disabled = false; }
+  },
+};
 function refreshCard() {
   const w = selected; if (!w || w.done) { closeCard(); return; }
   const a = w.agent, now = stage.wall();
   $('cardDot').style.setProperty('--c', VENDOR[w.look.vendorKey].css);
   setText('cardName', w.name);
-  { const open = player.active ? liveSnap?.agents.find(x => x.id === a.id)?.open : a.open; // in a film: only someone still in now
+  { const open = openFor(a);
     const b = $('cardOpen'); b.hidden = !open; if (open && !b.disabled) setText('cardOpen', open.label); }
   setText('cardHost', `${a.host}${a.kind === 'subagent' ? ' · helper' : a.kind === 'guardian' ? ' · reviewer' : ''}${mgr.floors.length > 1 ? ` · ${w.floor + 1}F` : ''}`);
   setText('cardTask', a.task || '—');

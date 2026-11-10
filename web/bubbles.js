@@ -62,8 +62,10 @@ export class Overlay {
     const tag = document.createElement('div'); tag.className = 'tag';
     // .rdy: "✓ your turn" (finished, ready for you); .hov: the current task, shown above the tag on hover (absolute, so
     // the tag never changes size when it appears)
-    tag.innerHTML = `<span class="dot"></span><span class="role" hidden></span><span class="nm"></span><span class="proj"></span><span class="rdy" hidden>✓ your turn</span><span class="jb" hidden></span><span class="st"></span><span class="hov" hidden></span>`;
-    tag.addEventListener('click', () => this.onSelect?.(worker));
+    tag.innerHTML = `<span class="dot"></span><span class="role" hidden></span><span class="nm"></span><span class="proj"></span><span class="rdy" hidden>✓ your turn</span><span class="jb" hidden></span><span class="st"></span><span class="hov" hidden></span><button type="button" class="op" hidden aria-label="Open this chat">↗</button>`;
+    tag.addEventListener('click', e => { if (!e.target.closest('.op')) this.onSelect?.(worker); });
+    // ↗ on hover: straight to this worker's chat (only where the office knows it can open it; main.js decides)
+    tag.querySelector('.op').addEventListener('click', e => { e.stopPropagation(); this.chat?.open(worker, e.currentTarget); });
     const bubble = document.createElement('div'); bubble.className = 'bubble';
     const mark = document.createElement('div'); mark.className = 'mark';
     // an off-screen agent waiting on you: a small chip on the screen edge pointing toward them
@@ -73,7 +75,7 @@ export class Overlay {
     this.el.append(bubble, tag, mark, edge);
     const it = { tag, bubble, mark, edge, lastText: null, lastKey: null, lastB: null, shownAt: 0, textAt: 0, heldUntil: 0, wasHeld: false, hover: false, hoverUntil: 0,
       lastMark: null, bw: 120, bh: 34, bDirty: true, ew: 0, eh: 26, nm: tag.querySelector('.nm'), proj: tag.querySelector('.proj'), role: tag.querySelector('.role'), dot: tag.querySelector('.dot'),
-      jb: tag.querySelector('.jb'), rdy: tag.querySelector('.rdy'), hov: tag.querySelector('.hov'), ar: edge.querySelector('.ar'), en: edge.querySelector('.en'),
+      jb: tag.querySelector('.jb'), op: tag.querySelector('.op'), canOpen: null, rdy: tag.querySelector('.rdy'), hov: tag.querySelector('.hov'), ar: edge.querySelector('.ar'), en: edge.querySelector('.en'),
       worker, ready: false, pinging: false, taskRaw: undefined, lc: '', tailSide: 0, bodyR: { l: 0, t: 0, r: 0, b: 0, kind: 'body', owner: worker } };
     // hover the tag (or an icon chip) for the full bubble text at far zoom; the worker's team threads stand out meanwhile
     tag.addEventListener('mouseenter', () => { it.hover = true; worker.mgr?.threads?.setHover?.(worker); });
@@ -200,6 +202,8 @@ export class Overlay {
       const err = w.agent.thought?.kind === 'error' && now - w.thoughtAt < ERR_TAG_MS;
       it.tag.classList.toggle('working', working); it.tag.classList.toggle('idle', !working);
       it.tag.classList.toggle('asking', asking); it.tag.classList.toggle('err', err);
+      const open = this.chat?.can(w) || null, openKey = open?.label || '';
+      if (it.canOpen !== openKey) { it.canOpen = openKey; it.op.hidden = !open; it.op.title = openKey; it.op.setAttribute('aria-label', openKey || 'Open this chat'); }
       const stOn = !ready && !handed && (asking || err || !working);
       // simply sitting and working, nothing for you: in a crowd this tag yields first (see the declutter pass)
       r.quiet = working && !asking && !err && !ready && !handed && w.state === 'work' && !it.hover && !w.agent.askTo;

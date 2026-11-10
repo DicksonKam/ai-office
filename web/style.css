@@ -689,3 +689,11 @@ body.filming #cardDay, body.filming #cardModel, body.filming #card dt:has(+ #car
 .aw-close:hover { background: rgba(90,70,110,.1); color: var(--ink); }
 body.tl-open #away { bottom: calc(var(--tl-h, 0px) + 24px); }
 body.filming.tl-open #player { bottom: calc(var(--tl-h, 0px) + 24px); }
+/* ↗ on a name tag: straight to that worker's chat. Outside the tag's own box, so the tag never changes size; it touches
+   the tag, so moving onto it keeps the hover */
+.tag .op { position: absolute; left: calc(100% - 3px); top: 50%; transform: translateY(-50%); width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: #7457c0; color: #fff; font: 800 13px/24px var(--font); text-align: center; cursor: pointer; box-shadow: 0 1px 4px rgba(59,51,70,.25); opacity: 0; pointer-events: none; transition: opacity .12s; }
+.tag:hover .op { opacity: 1; pointer-events: auto; }
+.tag .op:hover { background: #5b43a4; }
+.tag .op.busy { background: #9b8bc9; cursor: progress; }
+.tag .op.bad { background: #c0573f; }
+@media (hover: none) { .tag .op { display: none; } }
