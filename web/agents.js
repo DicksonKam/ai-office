@@ -15,6 +15,7 @@ import { breakAnim } from './director.js';
 import { waitingOnJob } from './jobs.js';
 const JOB_SWIVEL = -0.52; // the chair turned part of the way toward the laptop beside the desk; the head does the rest
 import { pulseJobLights } from './jobprops.js';
+import { stage } from './stage.js';
 
 const SPEED = 2.4;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -165,7 +166,7 @@ export class OfficeManager {
     this.applyFloorVisibility();
   }
   /** forget processed event ids after an hour (the server only resends the last few minutes) */
-  pruneEvents(t = Date.now()) {
+  pruneEvents(t = stage.wall()) {
     for (const [id, at] of this.processed) if (!(t - at < EVENT_KEEP_MS + 5 * 60000)) this.processed.delete(id);
   }
   setActiveFloor(k) {
@@ -195,6 +196,19 @@ export class OfficeManager {
     const off = now - Date.now(); this.clockOffset = this.clockOffset === undefined ? off : Math.max(off, this.clockOffset - 50);
     // what happened before the page was looking (or before a long silence) is recorded, not acted out
     const settling = !(now - this.lastSyncAt < SETTLE_GAP_MS); this.lastSyncAt = now;
+    this.apply(agents, events, now, plan, settling);
+  }
+  /** Everyone gone at once, and nothing remembered: the office before a film starts, jumps, or hands back to live. */
+  clearStage() {
+    for (const w of this.workers.values()) if (!w.done) w.finish();
+    this.workers.clear(); this.processed.clear(); this.pending = []; this.readyCount = 0;
+    for (const k of this.tosses) k.ball.parent?.remove(k.ball);
+    this.tosses = []; this.lastSyncAt = undefined; this.clockOffset = undefined;
+    this.threads?.reset?.();
+    this.propsT = 1;
+  }
+  /** a plan and who it is for, at `now` (a film calls this directly: what it shows must not be counted as today's) */
+  apply(agents, events, now, plan, settling = false) {
     this.ensureFloor(Math.max(1, plan.floors) - 1);
     const ids = new Set(agents.map(a => a.id));
     // parents first (a link-adopted helper may arrive with parentId set but no depth); a parent that helpers point to is a
@@ -309,7 +323,7 @@ export class OfficeManager {
       case 'handoff': say(from, 'talk', '⇄', `Handing over to ${to.name}${txt}`, to); to.react('nod', 3, { lookAt: from }); break;
       case 'approval': say(to, 'nod', '👍', `approved${txt}`, from, true); break;
       case 'launch': // work handed over without a word in the office: the desk phone rings and the worker takes the call
-        to.ringAt = performance.now(); to.mark('📞');
+        to.ringAt = stage.perf(); to.mark('📞');
         to.react('phone', 2.8, { bubble: linkBubble(ev, '📞', ev.confidence === 'inferred' ? `Probably work from ${from.name}` : `Work from ${from.name}`) });
         if (!from.reaction && from.state === 'work' && from.floor === to.floor) from.react('talk', 1.6, { lookAt: to });
         break;
@@ -346,8 +360,8 @@ export class OfficeManager {
       const away = !atDesk && w.idle && w.state !== 'meet';
       const mode = w.asksYou ? 'asking' : w.agent.askTo ? 'waiting' : away ? 'away' : w.idle ? 'idle' : now - (w.lastErrorAt || -1e9) < 8000 ? 'error'
         : w.agent.waiting ? 'waiting' : w.agent.thought?.kind === 'think' ? 'thinking' : 'working';
-      const start = w.agent.startedAt || w.firstSeen || (w.firstSeen = Date.now());
-      d.setWorkState({ mode, accent: VENDOR[w.look.vendorKey]?.accent ?? 0xffffff, away, minutes: (Date.now() - start) / 60000,
+      const start = w.agent.startedAt || w.firstSeen || (w.firstSeen = stage.wall());
+      d.setWorkState({ mode, accent: VENDOR[w.look.vendorKey]?.accent ?? 0xffffff, away, minutes: (stage.wall() - start) / 60000,
         errors: Math.max(0, (w.errors || 0) - (w.crumpleLag || 0)), project: w.agent.project || '' }); // a tossed page joins the bin when it lands
       for (; (w.reportsShown || 0) < (w.reports || 0); w.reportsShown = (w.reportsShown || 0) + 1) d.addReport?.(); // the sheets in the in-tray, however late the tab opened
       const g = w.agent.delegator ? w.giver : null; // a work order on the monitor while another agent's work is on the desk
@@ -363,7 +377,7 @@ export class OfficeManager {
     for (const f of this.floors) for (const d of f.desks) {
       const o = d.owner; // the lid moves under someone's hand: an empty desk's stays as it was left, for the next person to close
       const free = !!o && o.state === 'work' && o.sittingOn === d.chair && (!o.reaction || o.reaction.ambient);
-      if (d.jobKit.setJobs(deskJobs.get(d) || [], Date.now(), free)) o.react('reach', 1.25);
+      if (d.jobKit.setJobs(deskJobs.get(d) || [], stage.wall(), free)) o.react('reach', 1.25);
     }
     // "finished · your turn": a sage flag on the desk of a top-level session that finished a real task, until it works
     // again or leaves
@@ -387,7 +401,7 @@ export class OfficeManager {
     }
   }
   /** workers whose real session finished and is waiting for you to pick it up (for the HUD) */
-  readyList(now = performance.now()) { return this.list.filter(w => w.isReady(now)); }
+  readyList(now = stage.perf()) { return this.list.filter(w => w.isReady(now)); }
   /** a crumpled page arcs from the worker's hand into the desk bin */
   tossPaper(w) {
     const d = w.desk;
@@ -458,7 +472,7 @@ export class OfficeManager {
     return pts;
   }
   /** the server's clock now */
-  get serverNow() { return Date.now() + (this.clockOffset || 0); }
+  get serverNow() { return stage.film ?? Date.now() + (this.clockOffset || 0); }
   get list() { return [...this.workers.values()]; }
 }
 
@@ -506,7 +520,7 @@ export class Worker {
     this.history = []; this.historyV = 0; this.askRec = null; // recent real actions (recordAction), newest last; V bumps on change
     this.links = []; this.linkRanks = new Map(); // links today (the card's "Messages"); other id -> strongest confidence rank seen
     this.thoughtAt = 0; this.lastThoughtKey = null; this.thinkPauseT = 12 + Math.random() * 15; this.quirkT = 8 + Math.random() * 10;
-    this.enteredAt = performance.now() - Math.max(0, mgr.serverNow - plan.enteredAt); this.ambientKind = null;
+    this.enteredAt = stage.perf() - Math.max(0, mgr.serverNow - plan.enteredAt); this.ambientKind = null;
     this.raiseT = rnd(2, 6); this.planSeq = null; this.planStep = null;
     this.errorTimes = []; this.readyAt = 0; this.askStand = null; this.askPool = null; this.askRing = null; this.askPoolK = 0;
     this.readyOn = false; this.readyFlipAt = 0; this.finishMoment = false; this.workAgainAt = 0; // debounced "finished · your turn"
@@ -612,7 +626,7 @@ export class Worker {
   }
   /** "finished · your turn" as it stands right now (undebounced): a top-level session that finished a real task and has
    *  not worked again, left or started asking */
-  isReadyRaw(now) { return !!this.readyAt && !this.done && !this.leaving && this.agent.status !== 'working' && !this.agent.asking && !waitingOnJob(this.agent, Date.now()) && now - this.readyAt < this.mgr.readyMs; }
+  isReadyRaw(now) { return !!this.readyAt && !this.done && !this.leaving && this.agent.status !== 'working' && !this.agent.asking && !waitingOnJob(this.agent, stage.wall()) && now - this.readyAt < this.mgr.readyMs; }
   /** "finished · your turn" as everyone shows it (tag, desk flag, HUD, card): debounced by READY_DEBOUNCE_MS, so it
    *  turns on only once the finish has held (never for a single snapshot, which made the header count flicker) */
   isReady(now) { return this.readyOn && !this.done && !this.leaving && !this.agent.delegator; }
@@ -666,7 +680,7 @@ export class Worker {
     const prev = this.agent, met = this.appliedOnce; this.agent = a; this.appliedOnce = true;
     const key = a.thought ? `${a.thought.kind}|${a.thought.text}|${a.thought.at}` : null;
     if (key && key !== this.lastThoughtKey) {
-      const t = performance.now();
+      const t = stage.perf();
       // aged by the thought's own time, so a bubble shows and goes alike in every tab (an old thought shows no bubble)
       this.lastThoughtKey = key; this.thoughtAt = t - clamp(this.mgr.serverNow - (Number(a.thought.at) || this.mgr.serverNow), 0, 3600000);
       this.recordAction(a.thought.kind, iconFor(a.thought.kind), a.thought.text, a.thought.at);
@@ -692,7 +706,7 @@ export class Worker {
     this.askRec = a.asking || null;
     this.parent = a.parentId ? this.mgr.workers.get(a.parentId) || null : null;
     if (prev.status !== a.status && met) {
-      this.statusChangedAt = performance.now();
+      this.statusChangedAt = stage.perf();
       if (a.status !== 'working' && prev.status === 'working') {
         this.mark('✨');
         const l = this.isHelper ? this.lead : null; // the lead notices a helper finishing (a small nod, no words)
@@ -705,7 +719,7 @@ export class Worker {
    *  kept in time order, at most HISTORY_MAX; the same line again only moves its time. `at` is epoch ms. */
   recordAction(kind, icon, text, at, meta = null) {
     const t = String(text ?? '').replace(/\s+/g, ' ').trim(); if (!t) return;
-    const now = Date.now(), when = Number(at) > 0 ? Math.min(Number(at), now) : now;
+    const now = stage.wall(), when = Number(at) > 0 ? Math.min(Number(at), now) : now;
     const h = this.history, last = h[h.length - 1];
     if (last && last.kind === kind && last.text === t) { if (when > last.at) { last.at = when; this.historyV++; } return; }
     const e = { at: when, kind, icon: icon || '', text: t.length > 200 ? `${t.slice(0, 199)}…` : t, meta };
@@ -724,7 +738,7 @@ export class Worker {
   }
   react(anim, dur, opts = {}) {
     if (this.reaction) this.endReaction(this.reaction); // a sip cut short still puts the mug back
-    this.reaction = { anim, until: performance.now() + dur * 1000, ...opts }; this.animLock = null;
+    this.reaction = { anim, until: stage.perf() + dur * 1000, ...opts }; this.animLock = null;
   }
   /** tidy up after a reaction (finished or cut short): props back, heading back */
   endReaction(r) {
@@ -733,7 +747,7 @@ export class Worker {
     if (r.faceCam && this.state === 'work' && !this.askStand && this.sittingOn) this.heading = this.sittingOn.facing ?? this.heading; // swivel back to the desk
     if (r.anim === 'slump') { this.tossAt = 0; if (!this.mgr.tosses.some(k => k.w === this)) this.crumpleLag = 0; }
   }
-  mark(sym, opts) { if (this.marks.length < 2) this.marks.push({ sym, at: performance.now(), ambient: !!opts?.ambient }); }
+  mark(sym, opts) { if (this.marks.length < 2) this.marks.push({ sym, at: stage.perf(), ambient: !!opts?.ambient }); }
 
   // ---- positions -----------------------------------------------------------
   worldY() { return this.office.baseY + this.y; }
@@ -812,7 +826,7 @@ export class Worker {
   }
   /** second pass: what the plan gives this worker, and the facts it keeps for every tab alike */
   takeUp(p) {
-    const m = this.mgr, srv = m.serverNow, t = performance.now();
+    const m = this.mgr, srv = m.serverNow, t = stage.perf();
     this.leaving = p.leaving; this.name = p.name; this.errors = p.errors; this.reports = p.reports; this.seatedOnce = this.seatedOnce || p.seated;
     if (p.readyAt !== this.readyWall) {
       const wasMet = this.readyWall !== undefined;
@@ -1011,7 +1025,7 @@ export class Worker {
         if (this.desk && seat === this.desk.chair) {
           this.desk.setOccupant(this.look.vendorKey); this.desk.setLead(this.role === 'lead');
         }
-        if (this.isHelper && this.lead) { this.glanceLeadUntil = performance.now() + rnd(900, 1300); this.leadGlanceT = rnd(20, 40); } // a look over at the lead on sitting down
+        if (this.isHelper && this.lead) { this.glanceLeadUntil = stage.perf() + rnd(900, 1300); this.leadGlanceT = rnd(20, 40); } // a look over at the lead on sitting down
         this.state = 'work'; c.setAnim('type');
         break;
       }
@@ -1156,7 +1170,7 @@ export class Worker {
   /** waiting on a job, they swing the chair toward the laptop beside the desk: seat and body as one, over about a second */
   updateJobSwivel(dt) {
     const d = this.desk, seated = this.state === 'work' && d?.owner === this && this.sittingOn === d.chair && !this.reaction?.faceCam;
-    this.jobTurned = seated && this.idle && waitingOnJob(this.agent, Date.now());
+    this.jobTurned = seated && this.idle && waitingOnJob(this.agent, stage.wall());
     const was = this.jobSwivel || 0;
     this.jobSwivel = was + ((this.jobTurned ? JOB_SWIVEL : 0) - was) * Math.min(1, dt * 2.8);
     if (!was && !this.jobTurned) return;
@@ -1166,7 +1180,7 @@ export class Worker {
   restPick(dt) {
     this.restT -= dt;
     if (this.restT <= 0) {
-      const opts = waitingOnJob(this.agent, Date.now()) ? ['leanback', 'chin', 'leanback', 'idle'] : ['leanback', 'chin', 'phone', 'idle']; // waiting on a job: attentive, no phone
+      const opts = waitingOnJob(this.agent, stage.wall()) ? ['leanback', 'chin', 'leanback', 'idle'] : ['leanback', 'chin', 'phone', 'idle']; // waiting on a job: attentive, no phone
       if (this.deskMug && this.desk?.taken === this) opts.push('sip', 'sip');
       let a = opts[Math.floor(Math.random() * opts.length)];
       if (a === this.restAnim) a = opts[(opts.indexOf(a) + 1) % opts.length];

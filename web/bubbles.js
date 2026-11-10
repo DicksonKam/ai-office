@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { VENDOR, ROLE } from './palette.js';
 import { jobSummary } from './jobs.js';
+import { stage } from './stage.js';
 
 const ICON = { tool: '⌨️', think: '💭', say: '💬', read: '📩', error: '💦' };
 const v = new THREE.Vector3();
@@ -181,7 +182,7 @@ export class Overlay {
         it.rdy.hidden = !ready && !handed; if (rdyTxt) it.rdy.textContent = rdyTxt; r.readyOn = ready;
       }
       // work going on outside the turn, wherever this worker is: runs, the next timer, or one that failed
-      const js = jobSummary(w.agent, Date.now());
+      const js = jobSummary(w.agent, stage.wall());
       const jbTxt = js.failed ? `⚠ job failed` : [js.running ? `⚙ ${js.running} job${js.running > 1 ? 's' : ''}` : '', js.nextAt ? `⏱ ${clockText(js.nextAt)}` : ''].filter(Boolean).join(' ');
       if (it.jbTxt !== jbTxt) { it.jbTxt = jbTxt; it.jb.textContent = jbTxt; it.jb.hidden = !jbTxt; it.jb.classList.toggle('bad', !!js.failed); }
       // the current task, on hover (set only when it changes)
@@ -277,7 +278,7 @@ export class Overlay {
         if (b.kind === 'ambient' || b.kind === 'dots' || (!isReal(b.kind) && b.kind !== 'error' && b.kind !== 'ask' && !fresh)) b = null;
       }
       // far away: routine thoughts, "still working" dots and office life are noise (hover the tag to read them)
-      const hovered = it.hover || now < it.hoverUntil; r.hovered = hovered;
+      const hovered = it.hover || t < it.hoverUntil; r.hovered = hovered;
       const farDrop = x => far && !hovered && !FAR_KINDS.has(x.kind);
       if (b && farDrop(b)) b = null;
       // a bubble once up stays a moment (no blinking when a state flips back and forth); an answered ask goes at once

@@ -306,7 +306,7 @@ function injectWeekStyle() {
 
 // ---------- the drawer ----------
 /** Start the Today timeline. `mgr` is the OfficeManager; `demo` true in ?demo; lookAtWorker / showCard come from main.js. */
-export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}) {
+export function startTimeline({ mgr, demo = false, lookAtWorker, showCard, watch = null } = {}) {
   const pill = document.getElementById('todayToggle');
   if (!mgr || !pill || mgr.__timeline) return mgr?.__timeline;
 
@@ -318,6 +318,7 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
     + `<button type="button" role="tab" class="tl-tab" data-tab="today" aria-selected="true">Today</button>`
     + `<button type="button" role="tab" class="tl-tab" data-tab="week" aria-selected="false">Week</button></div>`
     + `<button type="button" class="tl-back" hidden title="back to the week">‹ back to week</button><span class="tl-date"></span>
+    <button type="button" class="tl-watch" hidden title="watch this day again in the office">▶ Replay this day</button>
     <div class="tl-sum"></div><span class="tl-src"></span>
     <button type="button" class="tl-close" aria-label="close the timeline">×</button></header>
     <div class="tl-scroll"><div class="tl-grid"><div class="tl-axis"><div class="tl-ticks"></div></div>
@@ -331,7 +332,8 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
   const $ = s => el.querySelector(s);
   const dateEl = $('.tl-date'), sumEl = $('.tl-sum'), srcEl = $('.tl-src'), scrollEl = $('.tl-scroll'), gridEl = $('.tl-grid');
   const ticksEl = $('.tl-ticks'), linesEl = $('.tl-lines'), rowsEl = $('.tl-rows'), nowEl = $('.tl-now'), emptyEl = $('.tl-empty');
-  const weekEl = $('.tl-week'), backEl = $('.tl-back'), tabEls = [...el.querySelectorAll('.tl-tab')];
+  const weekEl = $('.tl-week'), backEl = $('.tl-back'), tabEls = [...el.querySelectorAll('.tl-tab')], watchEl = $('.tl-watch');
+  let axisNow = null; // the day view's time axis: where a click on a bar lands in the film
   pill.hidden = false;
   pill.setAttribute('aria-controls', 'timeline');
 
@@ -483,6 +485,7 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
     const v = view();
     for (const b of tabEls) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
     backEl.hidden = v !== 'past';
+    watchEl.hidden = !watch || v === 'week';
     dateEl.classList.toggle('past', v === 'past');
     el.setAttribute('aria-label', v === 'today' ? "Today's timeline" : v === 'week' ? 'The week' : `Timeline of ${fmtDate(pastDay.date)}`);
   }
@@ -523,6 +526,7 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
     const ax = axisFor(first, now, compact, day);
     const span = ax.end - ax.start;
     const pct = t => Math.max(0, Math.min(100, (t - ax.start) / span * 100));
+    axisNow = { start: ax.start, span, day: past ? past.date : 'today' };
     const lw = labelW();
     gridEl.style.setProperty('--lw', `${lw}px`);
     dateEl.textContent = past ? fmtDate(past.date) : fmtDay(now);
@@ -773,7 +777,7 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
     const t = e.target.closest?.('[data-k]');
     const k = t ? Number(t.dataset.k) : -1;
     if (k < 0 || !items[k]) { if (tipK >= 0) hideTip(); return; }
-    if (k !== tipK) { tipK = k; tip.innerHTML = tipHtml(items[k]); tip.hidden = false; }
+    if (k !== tipK) { tipK = k; tip.innerHTML = tipHtml(items[k]) + (watch && items[k].type !== 'hour' ? '<div class="w">▶ click to watch from here</div>' : ''); tip.hidden = false; }
     placeTip(e.clientX, e.clientY);
   });
   el.addEventListener('pointerleave', hideTip);
@@ -786,7 +790,19 @@ export function startTimeline({ mgr, demo = false, lookAtWorker, showCard } = {}
     try { lookAtWorker?.(w); showCard?.(w); } catch (err) { console.warn('timeline:', err); }
   };
   const unfold = row => { if (!row) return false; const id = row.dataset.fold; expanded.has(id) ? expanded.delete(id) : expanded.add(id); render(); return true; };
-  rowsEl.addEventListener('click', e => { if (!unfold(e.target.closest('.tl-row.fold'))) jump(e.target.closest('.tl-row.live')); });
+  // --- click a bar: watch the office at that moment (web/player.js); the name still jumps to someone who is in
+  const watchAt = (day, at, id) => { if (!watch) return; setOpen(false, false); watch({ day, at, id }); };
+  rowsEl.addEventListener('click', e => {
+    if (unfold(e.target.closest('.tl-row.fold'))) return;
+    const track = e.target.closest('.tl-track'), row = e.target.closest('.tl-row');
+    if (track && row && watch && axisNow) {
+      const r = track.getBoundingClientRect(), f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      watchAt(axisNow.day, axisNow.start + f * axisNow.span, row.dataset.id || null);
+      return;
+    }
+    jump(e.target.closest('.tl-row.live'));
+  });
+  watchEl.addEventListener('click', () => { if (axisNow) watchAt(axisNow.day, null, null); });
   rowsEl.addEventListener('keydown', e => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     if (e.target.closest('.tl-row.fold')) { e.preventDefault(); unfold(e.target.closest('.tl-row.fold')); return; }

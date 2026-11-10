@@ -10,6 +10,10 @@ import { VENDOR, ROLE, NAMES, hash } from './palette.js';
 import { waitingOnJob, jobSummary } from './jobs.js';
 import { startDemo, startCrowdDemo } from './demo.js';
 import { Director, LAYOUT } from './director.js';
+import { stage } from './stage.js';
+import { createPlayer } from './player.js';
+import { teamsOf } from './film.js';
+import { startAway } from './away.js';
 import { createAlerts } from './app/notify.js';
 import { planHud, SECONDARY } from './hudfit.js';
 import { createQualityStepper } from './autoquality.js';
@@ -245,6 +249,7 @@ function timelapseLabel(d) {
   if (timelapseEl.textContent !== text) timelapseEl.textContent = text;
 }
 function clockNow() {
+  if (stage.film != null) return new Date(stage.film); // a film's own moment: its sun, its clocks
   const d = new Date();
   if (_q.has('date')) { const [y, m, day] = _q.get('date').split('-').map(Number); if (y && m && day) d.setFullYear(y, m - 1, day); }
   if (TIMELAPSE_S) {
@@ -345,18 +350,19 @@ $('cardOpen').addEventListener('click', async () => {
 });
 function refreshCard() {
   const w = selected; if (!w || w.done) { closeCard(); return; }
-  const a = w.agent, now = Date.now();
+  const a = w.agent, now = stage.wall();
   $('cardDot').style.setProperty('--c', VENDOR[w.look.vendorKey].css);
   setText('cardName', w.name);
-  { const b = $('cardOpen'); b.hidden = !a.open; if (a.open && !b.disabled) setText('cardOpen', a.open.label); }
+  { const open = player.active ? liveSnap?.agents.find(x => x.id === a.id)?.open : a.open; // in a film: only someone still in now
+    const b = $('cardOpen'); b.hidden = !open; if (open && !b.disabled) setText('cardOpen', open.label); }
   setText('cardHost', `${a.host}${a.kind === 'subagent' ? ' · helper' : a.kind === 'guardian' ? ' · reviewer' : ''}${mgr.floors.length > 1 ? ` · ${w.floor + 1}F` : ''}`);
   setText('cardTask', a.task || '—');
   const path = a.cwd || a.project || '';
   setText('cardProject', shortPath(path) || '—'); $('cardProject').title = path;
-  const mins = a.idleSince ? Math.round((Date.now() - a.idleSince) / 60000) : 0;
+  const mins = a.idleSince ? Math.round((stage.wall() - a.idleSince) / 60000) : 0;
   // the same words as the header, the bubbles and the log: waiting on you, finished · your turn, working, on a break
-  setText('cardStatus', a.asking ? (a.askTo ? `asking: ${w.askLine()}` : `waiting on you: ${a.asking}`) : w.isReady?.(performance.now()) ? 'finished · your turn'
-    : w.isHandedBack?.(performance.now()) ? `finished · ${w.turnWords()}`
+  setText('cardStatus', a.asking ? (a.askTo ? `asking: ${w.askLine()}` : `waiting on you: ${a.asking}`) : w.isReady?.(stage.perf()) ? 'finished · your turn'
+    : w.isHandedBack?.(stage.perf()) ? `finished · ${w.turnWords()}`
     : a.status === 'working' ? 'working' : waitingOnJob(a, now) ? jobWaitWords(a, now) : `on a break (${mins} min)`);
   setText('cardModel', a.model || '—');
   const day = timelineMod?.agentDay?.(w.id) || null;
@@ -382,7 +388,7 @@ function inOfficeSince(w, day, now) {
     while (i > 0 && segs[i - 1].to === segs[i].from) i--;
     return { t: segs[i].from };
   }
-  const seen = now - (performance.now() - w.enteredAt);
+  const seen = now - (stage.perf() - w.enteredAt);
   if (!firstSnapAt || seen > firstSnapAt + 3000) return { t: seen };
   let started = Number(w.agent.startedAt) || 0;
   if (started && started < 1e12) started *= 1000; // seconds, from an older collector
@@ -587,7 +593,7 @@ function rosterRow(a, cls) {
   // waiting on you: 🙋 and the question instead of the task (style.css styles .row.asking; the inline amber dot is the fallback)
   const ask = mine ? '<span class="ask" title="waiting on you" aria-label="waiting on you">🙋</span>' : '';
   const st8r = w?.starter ? `<span class="chip from" title="started by ${esc(w.starter.name)}">↗ ${esc(w.starter.name)}</span>` : '';
-  const js = jobSummary(a, Date.now());
+  const js = jobSummary(a, stage.wall());
   const jb = js.failed ? '<span class="chip jb bad" title="a background job failed">⚠</span>' : js.running ? `<span class="chip jb" title="background jobs running">⚙ ${js.running}</span>` : js.nextAt ? `<span class="chip jb" title="a timer is set">⏱ ${clockAt(js.nextAt)}</span>` : '';
   return `<div class="row ${cls} ${st}" style="--c:${col}"><span class="dot"></span><span class="nm">${esc(name)}</span>${role.label ? `<span class="chip" style="--r:${role.css}">${role.label}</span>` : ''}${st8r}${jb}${fl}${ask}<span class="task" title="${esc(mine ? `waiting on you: ${task}` : task)}">${esc(task)}</span><span class="st"${mine ? ' style="background:#e2b35d"' : ''}></span></div>`;
 }
@@ -627,7 +633,7 @@ function updateHud(snapshot) {
   // exclusive counts that add up: waiting on you, then finished · your turn, then working, then on a break
   const readyIds = new Set((mgr.readyList?.() || []).map(w => w.id)); // sessions that finished and handed back to you (green desk flag)
   let asking = 0, ready = 0, working = 0, onBreak = 0, onJob = 0, runs = 0;
-  const jobNow = Date.now();
+  const jobNow = stage.wall();
   for (const a of agents) {
     if (a.asking && !a.askTo) asking++; // asking the agent that gave the work: still working, not waiting on you
     else if (readyIds.has(a.id)) ready++;
@@ -708,7 +714,47 @@ const alerts = createAlerts({
   jumpTo: id => { const w = mgr.workers.get(id); if (w && !w.done) { lookAtWorker(w); showCard(w); } },
   onMenuOpen: () => { setKey(false); setMore(false); },
 });
-let latest = null, localDirector = null;
+let latest = null, localDirector = null, liveSnap = null;
+const waitingIn = snap => (snap?.agents || []).filter(a => a.asking && !a.askTo).length;
+// a film of the office (web/player.js): runs in this tab only, off to one side of the live office
+let filmSelected = null, away = null;
+const filmSource = isDemo ? () => import('./demofilm.js').then(m => m.demoDay()) : q => fetch(`api/film?${q}`).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); });
+const player = createPlayer({
+  mgr,
+  note: isDemo ? 'A made-up day, played back like your own would be.' : null,
+  source: filmSource,
+  config: () => liveSnap?.config || null,
+  onEnter() {
+    away?.hide(); setConn('◉', 'replay'); player.setWaiting(waitingIn(liveSnap)); },
+  onCleared() {
+    filmSelected = selected?.id ?? null;
+    for (const id of [...overlay.items.keys()]) overlay.remove(id);
+  },
+  onRestaged() {
+    if (!filmSelected) return;
+    const w = mgr.workers.get(filmSelected);
+    if (w && !w.done) { selected = w; refreshCard(); } else closeCard();
+    filmSelected = null;
+  },
+  onShow(agents, t, plan, jumped) {
+    latest = { agents, events: [], now: t, plan, teams: teamsOf(agents), schedules: [], config: liveSnap?.config };
+    if (jumped) { updateHud(latest); renderRoster(latest); applyDaylight(true); renderFloors(mgr); }
+  },
+  onLeave() {
+    setConn('●', isDemo ? 'demo' : 'live');
+    latest = null; reprimeLog = true; needDaylight = true;
+    if (liveSnap) onSnapshot(liveSnap);
+  },
+});
+/** from Today or Week: that day on film, a few seconds before the moment clicked, with whoever's row it was in view */
+async function watchMoment({ day, at = null, id = null }) {
+  const ok = await player.open(`day=${day}`, { at: at == null ? null : at - 5000 });
+  if (!ok || !id) return;
+  const w = mgr.workers.get(id);
+  if (w && !w.done) { lookAtWorker(w); showCard(w); }
+}
+away = startAway({ player, source: filmSource, enabled: !isDemo }); // back after a while: an offer of what you missed
+$('filmToggle').addEventListener('click', () => { if (player.active) player.leave(); else player.open('day=today'); });
 let prevStatus = new Map(); // id -> status from the previous snapshot (for the log diff)
 let prevAsking = new Map(); // id -> what the agent is asking the user, if anything
 let reprimeLog = false; // set on a reconnect: the first snapshot after it is a new baseline for the log diff
@@ -718,6 +764,8 @@ function onSnapshot(snap) {
   if (!firstSnapAt) firstSnapAt = Date.now();
   // the server's director runs the office; a tab only runs one for `?demo`, whose snapshots it makes up itself
   if (!snap.plan) snap.plan = (localDirector ??= new Director()).update(snap.agents, snap.events || [], Number(snap.now) || Date.now(), snap.config);
+  liveSnap = snap;
+  if (player.active) { alerts.update(snap); player.setWaiting(waitingIn(snap)); return; } // a film is on: the live office waits, its alerts do not
   mgr.schedules = snap.schedules || [];
   mgr.sync(snap.agents, snap.events || [], snap.now, snap.plan);
   renderNext(snap, Date.now());
@@ -782,7 +830,7 @@ function logFromSnapshot(snap, before, diff = true) {
       } else {
         const prev = before.get(a.id);
         if (a.asking && !prevAsking.get(a.id)) logAs(now, 'asking', a.askTo ? { name, to: nameOf(a.askTo, snap), text: a.asking } : { name, text: a.asking });
-        const fin = w?.justFinished?.() || w?.isReady?.(performance.now()) || w?.isHandedBack?.(performance.now());
+        const fin = w?.justFinished?.() || w?.isReady?.(stage.perf()) || w?.isHandedBack?.(stage.perf());
         if (prev === 'working' && a.status !== 'working') logAs(now, fin && a.delegator ? 'handedBack' : fin ? 'finished' : 'idle', fin && a.delegator ? { name, to: nameOf(a.delegator.id, snap) } : { name }); // a finish in this very snapshot, or a blip inside a hand-back that still holds
         else if (prev !== 'working' && a.status === 'working') logAs(now, 'working', { name });
       }
@@ -1049,11 +1097,16 @@ function step(now, coarse = false) {
   let dt = (now - last) / 1000; last = now;
   if (!document.hidden) quality?.tick(dt * 1000); // the page's own pause while hidden says nothing about the machine
   if (!(dt > 0)) return;
+  if (player.active) {
+    const rate = player.advance(dt, document.hidden), sim = Math.min(dt * rate, 1.2);
+    if (sim > 0) { const n = Math.max(1, Math.ceil(sim / (rate > 30 ? 0.2 : SUB_DT))); for (let i = 0; i < n; i++) mgr.update(sim / n, stage.perf()); }
+    return;
+  }
   const gap = dt > GAP_S;
   if (gap) dt = Math.min(dt, GAP_SIM_S);
-  if (dt <= 0.1 && !coarse) { mgr.update(dt, now); return; }
+  if (dt <= 0.1 && !coarse) { mgr.update(dt, stage.perf()); return; }
   const n = Math.ceil(dt / (coarse ? HIDDEN_DT : gap ? GAP_DT : SUB_DT));
-  for (let i = 0; i < n; i++) mgr.update(dt / n, now);
+  for (let i = 0; i < n; i++) mgr.update(dt / n, stage.perf());
 }
 setInterval(() => { if (document.hidden) step(performance.now(), true); }, 1000);
 document.addEventListener('visibilitychange', () => {
@@ -1071,10 +1124,10 @@ let fpsAcc = 0, fpsN = 0, lastFrame = performance.now();
 function frame(now) {
   const raw = Math.max(0, (now - lastFrame) / 1000); lastFrame = now; // the real frame time (clamped below)
   fpsN++; if (now - fpsAcc > 2000) { document.documentElement.dataset.fps = String(Math.round(fpsN * 1000 / (now - fpsAcc))); fpsAcc = now; fpsN = 0; }
-  if (needDaylight || TIMELAPSE_S) { needDaylight = false; applyDaylight(true); }
+  if (needDaylight || TIMELAPSE_S) { needDaylight = false; applyDaylight(true); } else if (player.active) applyDaylight();
   step(now);
   easeCamera(Math.min(raw, 0.1));
-  overlay.update(mgr.list, camera, window.innerWidth, window.innerHeight, now, mgr.activeFloor);
+  overlay.update(mgr.list, camera, window.innerWidth, window.innerHeight, stage.perf(), mgr.activeFloor);
   for (const id of [...overlay.items.keys()]) if (!mgr.workers.has(id)) overlay.remove(id);
   hudT += Math.min(raw, 1);
   if (hudT >= 1) { hudT = 0; applyDaylight(); if (latest) updateHud(latest); for (const f of mgr.floors) f.setFacadeLit?.(mgr.list.some(w => !w.done && w.floor === f.level)); retarget(); renderFloors(mgr); if (latest) renderRoster(latest); clockEl.textContent = clockNow().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); applyDaylight(); if (selected) refreshCard(); }
@@ -1082,7 +1135,7 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__office = { mgr, scene, camera, renderer, THREE,
+window.__office = { mgr, scene, camera, renderer, THREE, player, stage,
   /** Done-check used by MILESTONE.md: every floor / desk group untransformed, plus frame rate and counts. */
   check() {
     const bad = [];
@@ -1116,7 +1169,7 @@ requestAnimationFrame(frame);
 // day board (web/dayboard.js, optional): the scene is up, hand it the office
 import('./dayboard.js').then(m => m.startDayBoard?.({ mgr, demo: isDemo })).catch(() => {});
 // today timeline (web/timeline.js, optional): the Today pill appears only once the module has loaded
-import('./timeline.js').then(m => { timelineMod = m; m.startTimeline?.({ mgr, demo: isDemo, lookAtWorker, showCard }); }).catch(err => console.warn('timeline:', err));
+import('./timeline.js').then(m => { timelineMod = m; m.startTimeline?.({ mgr, demo: isDemo, lookAtWorker, showCard, watch: isDemo ? null : watchMoment }); }).catch(err => console.warn('timeline:', err));
 import('./sound.js').then(m => m.startSound?.({ mgr, demo: isDemo })).catch(err => console.warn('sound:', err));
 import('./seasons.js').then(m => m.decorate?.({ mgr, date: new Date(), params: _q })).catch(err => console.warn('seasons:', err)); // Halloween, winter, Lunar New Year, Mid-Autumn by the real date (?season= to check)
 if (_q.has('perf')) import('./perf.js').then(m => m.startPerf?.({ renderer, mgr, demo: isDemo, post: !hosted })).catch(err => console.warn('perf:', err)); // ?perf: frame-time readout, numbers to /api/perf

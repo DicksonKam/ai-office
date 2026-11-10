@@ -16,6 +16,7 @@ import { JobBook } from './jobbook.js';
 import { StartedBy } from './startedby.js';
 import { scanSessionStarts } from './collectors/claude.js';
 import { isLocalRequest } from './origin.js';
+import { Uptime } from './uptime.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -53,6 +54,10 @@ async function serveFile(res, filePath) {
 // see the whole office leave and walk back in after each server restart.
 let latestJson = null;
 const journal = new Journal().load();
+const uptime = new Uptime(path.join(CONFIG.dataDir, 'uptime.json'));
+uptime.beat();
+/** a film's records, with the stretches the office was not running */
+function filmRecord(opts) { const r = journal.film(opts); r.gaps = uptime.gaps(r.from, r.to); return r; }
 
 function sendJson(res, status, body, extra = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ...extra });
@@ -113,6 +118,18 @@ async function handle(req, res) {
       return sendJson(res, 200, { ...journal.day(q, { since }), since });
     } catch (e) {
       console.error('[journal api]', e);
+      return sendJson(res, 500, { error: 'journal unavailable' });
+    }
+  }
+  if (p === '/api/film') { // the records behind a film: same lines the Today and Week views read
+    try {
+      const q = url.searchParams, day = q.get('day') === 'today' ? localDate() : q.get('day');
+      if (day != null) { if (!isValidDay(day)) return sendJson(res, 400, { error: 'bad date: want a real YYYY-MM-DD' }); return sendJson(res, 200, filmRecord({ day })); }
+      const from = Number(q.get('from')), to = Number(q.get('to')) || Date.now();
+      if (!(from > 0) || !(to > from)) return sendJson(res, 400, { error: 'bad span: want from and to in ms' });
+      return sendJson(res, 200, filmRecord({ from, to }));
+    } catch (e) {
+      console.error('[film api]', e);
       return sendJson(res, 500, { error: 'journal unavailable' });
     }
   }
@@ -211,6 +228,7 @@ async function poll() {
     const sig = stripVolatile(snap);
     latestJson = JSON.stringify(snap);
     journal.record(snap);
+    uptime.beat(snap.now);
     // clients age bubbles, coffee breaks and departures by the snapshot clock: keep it ticking even when nothing moves
     if (sig !== lastSig || snap.now - lastSentAt >= HEARTBEAT_MS) { lastSig = sig; lastSentAt = snap.now; broadcast(latestJson); }
     logRecovered('[poll]');

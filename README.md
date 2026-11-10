@@ -270,6 +270,19 @@ which transforms the parent (it once tilted the whole building).
 - The Today drawer has a **Week** tab: seven days with an hourly heat strip (working minutes), sessions, helpers,
   hours working, waiting on you and reports; click a past day for its read-only timeline. APIs: `/api/week?end=`,
   `/api/journal?day=YYYY-MM-DD` (strictly validated), alongside `/api/today` and `/api/journal?since=`.
+- **Replay** (top right) plays a day of the office again, like a video you can still click: drag the bar or click
+  anywhere on it, play and pause (space), speeds from 1× to 60× and **Auto**, which races the quiet stretches and slows
+  to a pace where walks can be seen whenever someone comes, goes, needs you or deals with another agent. The bar shows
+  how busy each stretch was, amber dots for "waiting on you", ticks for arrivals and reports, and hatching where the
+  office was not running. While it plays you can turn the view, change floor and click anyone for what they were doing
+  then. Who was in, when, and working, waiting or reporting is the journal's own record; the walks, breaks and coffee
+  between are acted out again, and seats are real from the day they started being recorded. An amber edge and
+  "replay" where "live" was make it hard to mistake for now; anyone waiting on you right now still shows on the bar,
+  alerts still ring, and other tabs stay live. Clicking a bar in Today or Week opens that moment; **▶ Replay this day**
+  opens the whole day. Coming back after ten minutes or more away, when something happened, a quiet offer appears:
+  "While you were away · 3 h · 5 arrivals · ▶ Watch · 40 s". It never starts by itself and ends on the live office.
+  The public demo plays a made-up day. API: `/api/film?day=YYYY-MM-DD` or `?from=&to=` (ms); `npm run filmcheck`
+  compares films of every recorded day with the journal.
 - **Office sounds** (opt-in, in the Alerts ▾ menu, off by default): synthesized in the browser, no audio files — a door
   chime when someone arrives, soft typing that follows how many work on the floor you're looking at, a gentle bell
   when someone needs you (skipped when the Alerts chime already rings), a ding when someone finishes, a paper rustle
@@ -279,7 +292,7 @@ which transforms the parent (it once tilted the whole building).
 - **Worker card** (click anyone, or Tab / Shift+Tab through the people on the floor; Esc closes): a strip of their day,
   first seen and time worked today, their last five real actions with times, their team (click to jump), time in
   the office and the project.
-- `npm test` runs the week-digest, collector, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin and HUD-fit tests.
+- `npm test` runs the week-digest, collector, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin, audit, film, uptime and HUD-fit tests.
 - `npm run build:pages` builds that public demo as plain files in `dist-pages/`, with nothing from `server/`; a push to `main` publishes it after the tests pass. It tracks nobody, and if a visitor's machine struggles it gives up detail by itself (`web/autoquality.js`).
 - `npm run audit` compares the day journal with what the agents' own records say happened (Claude Code and Codex): false workers, missed work, how late the office noticed, and "waiting on you" that was wrong or missing. It reads times and record types only, and runs no AI. `-- --by-day` splits it.
 - `npm run smoke` starts the real server with an empty home folder and checks that it comes up, serves the page and refuses other web sites.
@@ -317,7 +330,8 @@ server/            Node: collectors → snapshot (agents, teams, events) → Web
   collectors/codex.js    Codex SQLite threads + rollouts (messages, reports, verdicts)
   collectors/cursor.js   Cursor agent chats (read-only state database + agent transcripts)
   collectors/gemini.js   Gemini CLI logs and chat recordings
-  journal.js             day journal (data/journal), /api/today, /api/journal
+  journal.js             day journal (data/journal), /api/today, /api/journal, /api/film
+  uptime.js              when the office was running (data/uptime.json): a film hatches the rest
   links/                 link readers: declared (the open format in LINKS.md, from ~/.ai-office/links), process ancestry; the resolver
   jobbook.js, rrule.js, jobdrop.js   background jobs, timers and schedules from any tool (~/.ai-office/jobs)
   startedby.js           which chat started which
@@ -326,7 +340,12 @@ server/            Node: collectors → snapshot (agents, teams, events) → Web
   probe.js               `node --no-warnings server/probe.js` prints who is in and recent events
 web/               Browser: Three.js scene
   office.js        one floor: zones (entrance, social, shared rooms, work, quiet), pods, kitchenette, lift/WC core, meeting room, day board, stairs, facade; obstacle footprints
-  timeline.js      the Today drawer (journal → one bar per agent, folding, tooltips, jump-to)
+  timeline.js      the Today drawer (journal → one bar per agent, folding, tooltips, jump-to, click to watch)
+  film.js          the journal run again through the director: the office at any moment of a day (no 3D)
+  player.js        Replay: the bar, speeds, keys, and the film's moment handed to the office
+  stage.js         what time it is in the office: now, or the film's moment
+  away.js          "while you were away": when this browser last had the office in view, and the offer
+  demofilm.js      the made-up day the public demo replays
   dayboard.js      the day board on every floor (today's finished work from the journal)
   jobs.js, jobprops.js   what a job means for its worker; the desk laptop and kitchen timer that show it
   threads.js       team threads on the floor between a lead and its helpers

@@ -625,3 +625,67 @@ body.tl-open .hostedNote { display: none; }
 #card .openChat { display: block; width: 100%; box-sizing: border-box; margin: 8px 0 2px; padding: 7px 12px; border: 0; border-radius: 10px; background: var(--ink); color: var(--paper); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 #card .openChat:hover { opacity: .88; }
 #card .openChat:disabled { opacity: .55; cursor: default; }
+
+/* ---- the office on film ------------------------------------------------------------------------------------------- */
+body.filming::after { content: ""; position: fixed; inset: 0; z-index: 4; pointer-events: none; box-shadow: inset 0 0 0 3px #e0a93f, inset 0 0 70px rgba(224,169,63,.16); }
+body.filming .pill.conn { color: #b57e12; }
+#player { position: fixed; z-index: 7; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(1040px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 14px 12px; border-radius: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 6px 24px rgba(59,51,70,.2); font-family: var(--font); backdrop-filter: blur(6px); }
+#player[hidden] { display: none; }
+.pl-top { display: flex; align-items: center; gap: 12px; min-height: 30px; }
+.pl-when { display: flex; align-items: center; gap: 4px; flex: none; }
+.pl-stamp { display: flex; align-items: baseline; gap: 6px; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pl-stamp b { font-weight: 800; }
+.pl-sep { color: var(--ink-soft); }
+.pl-rec { align-self: center; padding: 2px 8px; border-radius: 999px; background: #e0a93f; color: #3b2a05; font-size: 11px; font-weight: 800; letter-spacing: .02em; margin-right: 2px; }
+.pl-day { width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); font: 800 18px/1 var(--font); cursor: pointer; }
+.pl-day:hover:not(:disabled) { background: rgba(90,70,110,.1); }
+.pl-day:disabled { opacity: .25; cursor: default; }
+.pl-note { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 11.5px; line-height: 1.25; color: var(--ink-soft); text-align: center; }
+#player.busy .pl-note { color: var(--ink); font-weight: 700; }
+.pl-out { display: flex; align-items: center; gap: 8px; flex: none; }
+.pl-waiting { font-size: 12px; font-weight: 800; color: #a06c08; white-space: nowrap; }
+.pl-back { padding: 6px 13px; border: 0; border-radius: 999px; background: var(--ink); color: #fffdfa; font: 800 12.5px/1 var(--font); cursor: pointer; white-space: nowrap; }
+.pl-back:hover { background: #2c2536; }
+.pl-bar { display: flex; align-items: center; gap: 12px; margin-top: 7px; }
+.pl-play { flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #7457c0; cursor: pointer; display: grid; place-items: center; }
+.pl-play:hover { background: #6449ad; }
+.pl-play svg { width: 16px; height: 16px; fill: #fff; }
+.pl-track { position: relative; flex: 1 1 auto; min-width: 0; height: 44px; border-radius: 10px; background: rgba(90,70,110,.07); cursor: pointer; touch-action: none; outline-offset: 2px; }
+.pl-track canvas { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; }
+.pl-done { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 10px 0 0 10px; background: rgba(116,87,192,.16); pointer-events: none; }
+.pl-thumb { position: absolute; top: -3px; bottom: -3px; width: 4px; margin-left: -2px; border-radius: 3px; background: #4f3a94; box-shadow: 0 0 0 1.5px #fffdfa; pointer-events: none; }
+.pl-tip { position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 3px 9px; border-radius: 8px; background: var(--ink); color: #fffdfa; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.pl-speeds { flex: none; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(90,70,110,.08); }
+.pl-speeds button { min-width: 34px; padding: 5px 7px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-soft); font: 800 11.5px/1 var(--font); cursor: pointer; }
+.pl-speeds button.on { background: #fffdfa; color: var(--ink); box-shadow: 0 1px 3px rgba(59,51,70,.2); }
+body.filming .hostedNote { display: none; }
+@media (max-width: 720px) {
+  #player { padding: 9px 10px 10px; bottom: 8px; width: calc(100vw - 16px); }
+  .pl-note { display: none; }
+  .pl-top { justify-content: space-between; }
+  .pl-stamp { font-size: 14px; }
+  .pl-bar { flex-wrap: wrap; gap: 8px; }
+  .pl-track { order: 3; flex: 1 0 100%; height: 40px; }
+  .pl-speeds { margin-left: auto; }
+}
+/* the player sits at the bottom, so what usually lives there moves up above it; what the journal never recorded is left out */
+body.filming #card, body.filming #log { bottom: calc(var(--player-h, 100px) + 24px); }
+body.filming #card { max-height: max(140px, calc(100vh - var(--player-h, 100px) - var(--hud-h, 72px) - 36px)); max-height: max(140px, calc(100dvh - var(--player-h, 100px) - var(--hud-h, 72px) - 36px)); }
+body.filming #cardDay, body.filming #cardModel, body.filming #card dt:has(+ #cardModel), body.filming #cardThought, body.filming #cardThoughtDt, body.filming #rosterNext { display: none !important; }
+
+.tl-watch { margin: 0 2px 0 4px; padding: 3px 10px; border: 0; border-radius: 999px; background: #7457c0; color: #fff; font: 800 11px/1.3 var(--font); cursor: pointer; white-space: nowrap; }
+.tl-watch:hover { background: #6449ad; }
+.tl-watch[hidden] { display: none; }
+.tl-tip .w { margin-top: 4px; font-size: 11px; font-weight: 700; color: #7457c0; }
+#timeline .tl-track { cursor: pointer; }
+#away { position: fixed; z-index: 7; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 9px 10px 9px 16px; border-radius: 16px; background: var(--paper); color: var(--ink); box-shadow: 0 6px 24px rgba(59,51,70,.2); font-family: var(--font); backdrop-filter: blur(6px); }
+#away[hidden] { display: none; }
+.aw-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.aw-text b { font-size: 13.5px; font-weight: 800; white-space: nowrap; }
+.aw-text span { font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aw-watch { flex: none; padding: 8px 14px; border: 0; border-radius: 999px; background: #7457c0; color: #fff; font: 800 12.5px/1 var(--font); cursor: pointer; white-space: nowrap; }
+.aw-watch:hover { background: #6449ad; }
+.aw-close { flex: none; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-soft); font: 700 18px/1 var(--font); cursor: pointer; }
+.aw-close:hover { background: rgba(90,70,110,.1); color: var(--ink); }
+body.tl-open #away { bottom: calc(var(--tl-h, 0px) + 24px); }
+body.filming.tl-open #player { bottom: calc(var(--tl-h, 0px) + 24px); }

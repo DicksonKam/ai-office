@@ -16,6 +16,7 @@ const TOP_KINDS = new Set(['desktop', 'cli']);
 const EVENT_KINDS = new Set(['spawn', 'message', 'report', 'review', 'verdict', 'handoff', 'approval', 'launch']);
 const ITEM_LIMIT = 200;
 const RAW_LIMIT = 500;
+const FILM_MAX_DAYS = 14;      // the longest span a film covers
 const DAY_LIMIT = 5000;        // /api/journal?day=: a whole past day (the newest lines if it was busier than this)
 const TODAY_TTL_MS = 30000;    // the week view's digest of today is recomputed at most this often
 const DAY_CACHE_MAX = 60;      // digests of past (immutable) days kept in memory
@@ -73,7 +74,7 @@ const clip = (s, n) => (s == null ? null : (s = String(s).replace(/\s+/g, ' ').t
 /** Parse journal text; tolerant of a torn last line or junk. */
 /** A session that came and went within seconds with nothing to show for it (a program asking one quick question) is not part
  *  of anyone's day. The office no longer lets them in, but the journals from before that still hold thousands. */
-const BLIP_KINDS = new Set(['arrived', 'working', 'idle', 'left']);
+const BLIP_KINDS = new Set(['arrived', 'working', 'idle', 'left', 'seat']);
 export function withoutBlips(entries, ms = 15000) {
   const byId = new Map();
   for (const e of entries) if (e.id) (byId.get(e.id) || byId.set(e.id, []).get(e.id)).push(e);
@@ -138,6 +139,7 @@ export class Journal {
     this.prev = null;            // Map id -> { status, asking, role, workingSince, info }
     this.seenEvents = new Map(); // event id -> t first written (kept ~1 day, survives the midnight rotation)
     this.date = null;
+    this.seats = new Map();      // id -> the desk or pod seat last written (a film puts people back where they really sat)
     this.caches = new Map();     // date -> FileCache
     this.todayMemo = { key: null, value: null };
     this.failures = 0;
@@ -252,6 +254,18 @@ export class Journal {
       this.prev.delete(id);
     }
 
+    // where each one really sits, when that changes (a new file, or a restart, writes them all again)
+    if (rotated) this.seats.clear();
+    for (const [id, w] of Object.entries(snap.plan?.workers || {})) {
+      if (!cur.has(id) || !(w.desk || w.slot)) continue;
+      const seat = w.slot ? { slot: { f: w.slot.f, d: w.slot.d, i: w.slot.i } } : { desk: { f: w.desk.f, d: w.desk.d } };
+      const key = JSON.stringify(seat);
+      if (this.seats.get(id) === key) continue;
+      this.seats.set(id, key);
+      out.push({ t: now, kind: 'seat', id, ...seat });
+    }
+    for (const id of this.seats.keys()) if (!cur.has(id)) this.seats.delete(id);
+
     // interaction events, the first time each id is seen
     for (const ev of snap.events || []) {
       if (!ev?.id || !EVENT_KINDS.has(ev.kind) || this.seenEvents.has(ev.id)) continue;
@@ -333,6 +347,28 @@ export class Journal {
     const list = all.slice(Math.max(i, all.length - limit));
     const start = dayStart(date, this.timeZone), end = dayStart(addDays(date, 1), this.timeZone);
     return { date, today: localDate(now, this.timeZone), start, end, total, trimmed: list.length < total, entries: list };
+  }
+
+  /** The lines a film needs: for one day, or a span (from the start of the day it begins on, so it knows who was in).
+   *  A past day is trimmed to when something was happening; today runs up to now. */
+  film({ day = null, from = null, to = null, now = Date.now(), maxDays = FILM_MAX_DAYS } = {}) {
+    if (day) { from = dayStart(day, this.timeZone); to = dayStart(addDays(day, 1), this.timeZone); }
+    to = Math.min(to, now);
+    const first = localDate(from, this.timeZone), last = localDate(to - 1, this.timeZone), dayStarts = [], entries = [];
+    let d = first, n = 0;
+    while (n++ < maxDays) {
+      dayStarts.push(dayStart(d, this.timeZone));
+      entries.push(...this.day(d, { now }).entries);
+      if (d >= last) break;
+      d = addDays(d, 1);
+    }
+    if (day && entries.length) {
+      from = Math.max(from, entries[0].t - 60000);
+      if (day !== localDate(now, this.timeZone)) to = Math.min(to, entries[entries.length - 1].t + 60000);
+    }
+    let files = [];
+    try { files = fs.readdirSync(this.dir).map(f => /^(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(f)?.[1]).filter(Boolean).sort(); } catch { /* no journal yet */ }
+    return { day, from, to, dayStarts, entries, prev: files.filter(f => f < first).at(-1) || null, next: files.filter(f => f > last).at(0) || null };
   }
 
   /** One day's digest for the week view. Past days are cached by file mtime + size, today is recomputed at most every

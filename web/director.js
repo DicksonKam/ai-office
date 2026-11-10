@@ -201,6 +201,8 @@ export class Director {
   deskSlots(f, d) { const out = []; for (const o of this.recs.values()) if (o.slot && o.slot.f === f && o.slot.d === d) out.push(o); return out; }
   allocDesk(r) {
     // work another agent gave this one (not its team: a desk of its own): the free desk nearest the giver's, on its floor
+    const hinted = this.hintedDesk(r);
+    if (hinted) { if (hinted.f >= this.floors) this.floors = hinted.f + 1; r.desk = { f: hinted.f, d: hinted.d }; return r.desk; }
     const g = this.giver(r), near = g ? (g.desk || g.slot) : null;
     if (near) {
       const [nx, nz] = deskXZ(near.d);
@@ -215,6 +217,21 @@ export class Director {
         || LAYOUT.desks.find(d => this.deskFree(f, d) && !this.deskSlots(f, d).length);
       if (d) { r.desk = { f, d }; return r.desk; }
     }
+  }
+  /** A film knows where someone really sat (the journal's `seat` lines): that place, when it is free. Live, nobody calls it. */
+  hint(id, seat) {
+    (this.hints ??= new Map()).set(id, seat);
+    const r = this.recs.get(id); if (!r || r.leaving) return;
+    const want = seat.desk, mine = r.desk;
+    if (want && mine && (mine.f !== want.f || mine.d !== want.d) && this.deskFree(want.f, want.d) && !this.deskSlots(want.f, want.d).length) {
+      if (want.f >= this.floors) this.floors = want.f + 1;
+      r.desk = { f: want.f, d: want.d };
+      if (r.step?.k === 'desk') this.setStep(r, this.deskStep(r));
+    }
+  }
+  hintedDesk(r) {
+    const want = this.hints?.get(r.id)?.desk;
+    return want && this.deskFree(want.f, want.d) && !this.deskSlots(want.f, want.d).length ? want : null;
   }
   releaseDesk(r) { r.desk = null; }
   releaseSlot(r) { r.slot = null; }
@@ -261,7 +278,9 @@ export class Director {
   goToSlot(r, pod, opt = {}) {
     if (!r.slot || r.slot.f !== pod.f || r.slot.d !== pod.d) {
       const used = new Set(this.deskSlots(pod.f, pod.d).filter(o => o !== r).map(o => o.slot.i));
-      let i = -1; for (let k = 0; k < LAYOUT.slots && i < 0; k++) if (!used.has(k)) i = k;
+      const want = this.hints?.get(r.id)?.slot;
+      let i = want && want.f === pod.f && want.d === pod.d && !used.has(want.i) ? want.i : -1;
+      for (let k = 0; k < LAYOUT.slots && i < 0; k++) if (!used.has(k)) i = k;
       if (i < 0) { if (!r.desk) this.allocDesk(r); this.setStep(r, this.deskStep(r), opt); return; } // a full pod: a spare desk, and stay there
       r.slot = { f: pod.f, d: pod.d, i }; this.releaseDesk(r);
     }

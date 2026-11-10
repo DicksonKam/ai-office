@@ -11,6 +11,7 @@
 // nor while the lead is hosting a kickoff in the meeting room (the team is gathered there, not at the pod).
 // A focused team (focusLead: set by focus(), e.g. from the roster, or by hovering a member's name tag) is drawn
 // stronger while the other teams step back.
+import { stage } from './stage.js';
 import * as THREE from 'three';
 import { VENDOR } from './palette.js';
 
@@ -55,13 +56,15 @@ export class Threads {
     this.focusUntil = 0;
     this.hoverLead = null;    // lead id of the team whose name tag is under the pointer (wins over focusLead)
   }
+  /** everyone has left the stage at once (a film jumped) */
+  reset() { for (const team of this.teams.values()) this.disposeTeam(team); this.teams.clear(); this.pulses.clear(); this.rebuildT = 0; }
   /** a helper's real report just landed: flash its thread */
-  pulse(helperId) { this.pulses.set(helperId, performance.now()); this.rebuildT = 0; }
+  pulse(helperId) { this.pulses.set(helperId, stage.perf()); this.rebuildT = 0; }
   /** highlight a team's threads: a lead (worker or id), for `seconds` (0: until focus(null)) */
   focus(lead, seconds = 14) {
     this.focusLead = lead == null ? null : (lead.id ?? lead);
     this.focusRaw = this.focusLead; // the worker itself (a delegated worker or its giver shows that line while focused)
-    this.focusUntil = this.focusLead && seconds > 0 ? performance.now() + seconds * 1000 : 0;
+    this.focusUntil = this.focusLead && seconds > 0 ? stage.perf() + seconds * 1000 : 0;
     this.rebuildT = 0;
   }
   /** the pointer is on a worker's name tag (null: left it): that worker's team stands out */
