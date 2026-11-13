@@ -34,9 +34,14 @@ export function breakAnim(style, from, elapsed) {
   return 'idle';
 }
 
-const IN_WALK_S = 5.5;                    // from the street to the door mat (10.9 m)
+// the way in (web/site.js approach): out of the lobby next door, along the pavement, up the path to the door mat.
+// The walking times keep the pace they always had (5.5 s in, 8 s out for the old 10.9 m from the street), over the real
+// length; __office.check() fails if the built route and this number ever drift apart.
+export const ENTRY_M = 17.66;
+const IN_WALK_S = ENTRY_M * 5.5 / 10.9;  // ~8.9 s from the lobby to the door mat
 const WIPE_S = 1.2;                       // feet on the mat
-const OUT_S = 8;                          // from the door back to the street
+const IN_GAP_MS = 450;                    // several arriving together leave the lobby one after another, not as one
+const OUT_S = ENTRY_M * 8 / 10.9;         // ~13 s from the door back into the lobby
 const WALK_SPEED = 2.3;                   // m/s, a little under the tabs' 2.4: arrivals never miss their dwell
 const SETTLE_GAP_MS = 30000;              // a first update, or one after this long a silence: whoever is in was already in
 const ARRIVING_MS = 20000;                // ...unless their session started this recently
@@ -115,7 +120,7 @@ export class Director {
     for (let a of [...agents].sort((x, y) => depthOf(x) - depthOf(y))) {
       if (parents.has(a.id) && roleOf(a) === 'member') a = { ...a, role: 'lead' };
       let r = this.recs.get(a.id);
-      if (!r) { r = this.newRec(a); this.recs.set(a.id, r); if (settling && !(now - a.startedAt < ARRIVING_MS)) this.settle(r); else this.setStep(r, { k: 'in' }, { walk: IN_WALK_S, since: now }); continue; }
+      if (!r) { r = this.newRec(a); this.recs.set(a.id, r); if (settling && !(now - a.startedAt < ARRIVING_MS)) this.settle(r); else { const since = Math.max(now, this.nextInAt || 0); this.nextInAt = since + IN_GAP_MS; this.setStep(r, { k: 'in' }, { walk: IN_WALK_S, since }); } continue; }
       this.applyAgent(r, a);
     }
     for (const r of this.recs.values()) {

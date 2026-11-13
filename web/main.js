@@ -9,7 +9,7 @@ import { Overlay } from './bubbles.js';
 import { VENDOR, ROLE, NAMES, hash } from './palette.js';
 import { waitingOnJob, jobSummary } from './jobs.js';
 import { startDemo, startCrowdDemo } from './demo.js';
-import { Director, LAYOUT } from './director.js';
+import { Director, LAYOUT, ENTRY_M } from './director.js';
 import { stage } from './stage.js';
 import { createPlayer } from './player.js';
 import { teamsOf } from './film.js';
@@ -1178,8 +1178,42 @@ window.__office = { mgr, scene, camera, renderer, THREE, player, stage,
       }
     });
     if (!isRot0(scene) || !isScale1(scene)) bad.push('scene transformed');
+    const way = mgr.site?.approach || [];
+    const wayM = way.reduce((n, p, i) => (i ? n + Math.hypot(p.x - way[i - 1].x, p.z - way[i - 1].z) : 0), 0);
+    if (way.length && Math.abs(wayM - ENTRY_M) > 0.3) bad.push(`the way in is ${wayM.toFixed(2)} m, the director plans for ${ENTRY_M} m`);
     return { ok: bad.length === 0, bad, fps: Number(document.documentElement.dataset.fps || 0), floors: mgr.floors.length,
       workers: mgr.list.length, drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+  },
+  /** Milestone 30 E1: walking along `pts` (the way in, by default), where is a worker first seen? A body point counts as
+   *  seen when it is on the canvas, not under a header, panel or player, and nothing in the scene stands between it and
+   *  the camera. Returns the metres walked before anything of them shows (and each sample, with `detail`). */
+  walkCheck(pts = mgr.site?.approach, { step = 0.2, detail = false, heights = [0.1, 0.9, 1.7] } = {}) {
+    if (!pts?.length) return null;
+    camera.updateMatrixWorld();
+    const ray = new THREE.Raycaster(), dir = new THREE.Vector3().copy(CAM_DIR), v = new THREE.Vector3(); ray.camera = camera; // sprites ask for it
+    const panels = [...document.querySelectorAll('#hud .title, #hud .legend, #hud .pills, #roster, #log, #card, #timeline, #player, #away, .hostedNote')]
+      .filter(e => e.offsetWidth && !e.hidden && getComputedStyle(e).display !== 'none').map(e => e.getBoundingClientRect());
+    const solids = [mgr.site.group, ...mgr.floors.map(f => f.group)];
+    const seen = (x, y, z) => {
+      v.set(x, y, z).project(camera);
+      const sx = (v.x + 1) / 2 * innerWidth, sy = (1 - v.y) / 2 * innerHeight;
+      if (sx < 0 || sx > innerWidth || sy < 0 || sy > innerHeight) return false;
+      if (panels.some(r => sx >= r.left && sx <= r.right && sy >= r.top && sy <= r.bottom)) return false;
+      ray.set(new THREE.Vector3(x, y, z).addScaledVector(dir, 0.05), dir); ray.far = 200;
+      return !ray.intersectObjects(solids, true).some(h => h.object.visible && h.object.isMesh && !h.object.material?.transparent);
+    };
+    const out = []; let walked = 0, first = null;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i], len = Math.hypot(b.x - a.x, b.z - a.z);
+      for (let d = 0; d < len; d += step) {
+        const x = a.x + (b.x - a.x) * d / len, z = a.z + (b.z - a.z) * d / len, y0 = mgr.site.groundY(x, z);
+        const vis = heights.map(h => seen(x, y0 + h, z));
+        if (detail) out.push({ at: +(walked + d).toFixed(2), x: +x.toFixed(2), z: +z.toFixed(2), vis });
+        if (first == null && vis.some(Boolean)) first = +(walked + d).toFixed(2);
+      }
+      walked += len;
+    }
+    return { firstSeenAfter: first, length: +walked.toFixed(2), window: [innerWidth, innerHeight], ...(detail ? { samples: out } : {}) };
   }, stepNow() { step(performance.now(), true); }, view(zoom = 1, x = 0, z = 0) { Object.assign(debugView, { zoom, x, z }); retarget(true); }, focusOn };
 requestAnimationFrame(frame);
 

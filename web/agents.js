@@ -425,13 +425,16 @@ export class OfficeManager {
     this.propsT = (this.propsT || 0) + dt;
     if (this.propsT > 0.4) { this.propsT = 0; this.syncProps(now); }
     const g = this.ground;
-    let nearDoor = false;
+    let nearDoor = false, nearLobby = false;
+    const lobby = this.site?.lobby;
     for (const w of [...this.workers.values()]) {
       w.update(dt, now);
       if (w.state === 'walk' && w.floor === 0 && g.door && Math.abs(w.pos.z - g.door.z) < 1.4 && w.pos.x < g.door.x + 2.0 && w.pos.x > g.door.x - 2.6) nearDoor = true;
+      if (lobby && !w.done && w.floor === 0 && Math.abs(w.pos.x - lobby.x) < 1.3 && Math.abs(w.pos.z - lobby.z) < 1.7) nearLobby = true;
       if (w.done) this.workers.delete(w.id);
     }
     if (g.door) g.door.wantOpen = nearDoor;
+    if (lobby) lobby.wantOpen = nearLobby;
     for (const f of this.floors) f.update(dt);
     this.updateTosses(dt);
     pulseJobLights(now / 1000);
@@ -915,7 +918,9 @@ export class Worker {
       case 'in': { // up the path from the street to the door mat
         const site = m.site, start = site ? site.approach[0] : { x: door.outside.x - 0.9, z: door.outside.z };
         this.pos.set(start.x, 0, start.z); this.floor = 0;
-        this.path = [...(site ? site.approach.slice(1) : []), door.inside].map(q => ({ ...q, floor: 0 })); this.next = 'wipe'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
+        // on the pavement each keeps a lane of their own (a team arriving is a loose file, not one body)
+        const lane = ((this.traits?.fidget ?? 0.5) - 0.5) * 0.5;
+        this.path = [...(site ? site.approach.slice(1) : []), door.inside].map((q, i) => ({ ...q, z: site && (i === 1 || i === 2) ? q.z + lane : q.z, floor: 0 })); this.next = 'wipe'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
         break;
       }
       case 'desk': if (desk) this.sitAt(desk.chair, f); break;
@@ -1194,7 +1199,7 @@ export class Worker {
     const c = this.chibi;
     const site = this.mgr.site;
     const fadingOut = this.state === 'gone' || (this.state === 'walk' && this.next === 'gone' && this.floor === 0 &&
-      (site ? this.pos.z > site.fadeZ - 0.1 && site.isOutdoor(this.pos.x) : this.pos.x < this.mgr.ground.door.x - 0.4)) ||
+      (site ? site.isHidden(this.pos.x, this.pos.z) : this.pos.x < this.mgr.ground.door.x - 0.4)) || // back inside next door, out of sight
       (this.state === 'ambient' && this.ambientKind === 'wc' && this.timer > 0.5 && this.timer < (this.ambientDur || 8) - 0.5); // in the restroom: out of sight
     this.fade += (fadingOut ? -3 : 3) * dt;
     this.fade = clamp(this.fade, 0, 1);

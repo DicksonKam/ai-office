@@ -137,3 +137,16 @@ test('a break pose follows the clock alone, so every tab agrees', () => {
   const total = BREAK_CYCLES.cafe.reduce((n, [, s]) => n + s, 0);
   assert.equal(breakAnim('cafe', 0, total + 6.5), 'chat');
 });
+
+test('the way in: walking times follow the real route, and several arriving together leave the lobby one after another', async () => {
+  const { ENTRY_M } = await import('../web/director.js');
+  const d = new Director({ seed: 3 });
+  d.update([agent('lead')], [], T0);
+  const kids = ['h1', 'h2', 'h3', 'h4'].map(id => agent(id, { parentId: 'lead', role: 'helper', startedAt: T0 + 1000 }));
+  const plan = d.update([agent('lead'), ...kids], [], T0 + 1000);
+  const starts = kids.map(k => plan.workers[k.id].step.since - (T0 + 1000));
+  assert.deepEqual(starts, [0, 450, 900, 1350]);
+  for (const k of kids) assert.ok(Math.abs(plan.workers[k.id].step.walk - ENTRY_M * 5.5 / 10.9) < 1e-9, 'the old pace over the real length');
+  const later = d.update([agent('lead'), ...kids, agent('solo', { startedAt: T0 + 20000 })], [], T0 + 20000);
+  assert.equal(later.workers.solo.step.since, T0 + 20000, 'someone alone does not wait for anyone');
+});

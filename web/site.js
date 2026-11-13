@@ -168,7 +168,6 @@ export function buildSite(scene, office) {
   group.add(meadowPatches([
     [hx + 6.8, -0.4, 3.4, 4.6, 1],
     [-hx * 0.3, -hz - 12.0, 6.0, 2.4, 2],
-    [-hx - 13.0, hz - 2.5, 3.0, 4.8, 3],
   ], GROUND + 0.006));
 
   // every paved surface shares one material (UVs scaled to a 2 m tile), so all paving merges into one draw
@@ -534,6 +533,58 @@ export function buildSite(scene, office) {
     }
   });
 
+  // ---- next door (Milestone 30): a quiet one-storey block on the lot west of the site, its lobby door on the pavement.
+  //      Everyone comes out of that door and goes back in through it: inside, behind solid walls, nobody can be seen
+  //      appearing or going. Quieter than the office (greige render, shaded windows, nothing lit inside), so the office
+  //      stays what you look at. ----
+  const NB = { x0: -hx - 8.55, x1: -hx - 19.0, z0: -hz + 6.0, z1: sz0 - 0.1, g: 3.6, u: 0 };     // x -25.2…-35.65, z -0.4…10.3; one storey, the office's height
+  const lobbyX = NB.x0 - 0.95, lobbyW = 1.5, doorH = 2.35;                     // the door: its centre 0.95 m in from the east corner
+  {
+    const render = toon(0xd3d1cb), renderDark = toon(0xbdbab3), plinthMat = toon(0x9d9a94), trimMat = toon(0xe9e6e0);
+    const winMat = toon(0x8d98a3), frameMat = toon(PAL.slateDark), lobbyIn = matte(0x4a4550, { side: THREE.BackSide });
+    const W = NB.x0 - NB.x1, D = NB.z1 - NB.z0, cx = (NB.x0 + NB.x1) / 2, cz = (NB.z0 + NB.z1) / 2, H = NB.g + NB.u, T = 0.25;
+    const at = (o, y) => ({ x: o.x, y: GROUND + y, z: o.z, outline: o.outline ?? 0.015, receive: true });
+    // walls as slabs (so the inside is really inside): the street wall has the lobby door cut out of it
+    const doorL = lobbyX - lobbyW / 2, doorR = lobbyX + lobbyW / 2;
+    group.add(box(NB.x0 - doorR, H, T, render, at({ x: (NB.x0 + doorR) / 2, z: NB.z1 - T / 2 }, H / 2)));
+    group.add(box(doorL - NB.x1, H, T, render, at({ x: (doorL + NB.x1) / 2, z: NB.z1 - T / 2 }, H / 2)));
+    group.add(box(lobbyW, H - doorH, T, render, at({ x: lobbyX, z: NB.z1 - T / 2 }, doorH + (H - doorH) / 2)));
+    group.add(box(W, H, T, render, at({ x: cx, z: NB.z0 + T / 2 }, H / 2)));
+    for (const x of [NB.x0 - T / 2, NB.x1 + T / 2]) group.add(box(T, H, D, render, at({ x, z: cz }, H / 2)));
+    group.add(box(W + 0.2, 0.3, D + 0.2, renderDark, at({ x: cx, z: cz }, H + 0.15)));                   // roof slab
+    for (const [w, d, x, z] of [[W + 0.2, 0.18, cx, NB.z1 + 0.01], [W + 0.2, 0.18, cx, NB.z0 - 0.01], [0.18, D + 0.2, NB.x0 + 0.01, cz], [0.18, D + 0.2, NB.x1 - 0.01, cz]])
+      group.add(box(w, 0.45, d, trimMat, at({ x, z }, H + 0.5)));                                           // parapet
+    group.add(box(W + 0.06, 0.38, D + 0.06, plinthMat, at({ x: cx, z: cz, outline: 0.01 }, 0.19)));       // plinth
+    // the lobby: a dim room behind the door (seen only through it), its floor flush with the pavement
+    group.add(box(3.2, doorH + 0.4, 3.6, lobbyIn, { x: NB.x0 - T - 0.02 - 1.6, y: GROUND + (doorH + 0.4) / 2, z: NB.z1 - T - 1.82, cast: false, receive: false })); // inside the walls, not through them
+    // shaded windows: upper floor along both faces you see, ground floor beside the lobby
+    const win = (x, y, z, w, h, alongX) => {
+      group.add(box(alongX ? w : 0.06, h, alongX ? 0.06 : w, winMat, { x, y: GROUND + y, z, cast: false, receive: false }));
+      group.add(box(alongX ? w + 0.16 : 0.1, 0.08, alongX ? 0.1 : w + 0.16, trimMat, { x: alongX ? x : x + 0.03, y: GROUND + y - h / 2 - 0.06, z: alongX ? z + 0.03 : z, outline: 0.006, receive: false }));
+      group.add(box(alongX ? 0.05 : 0.07, h, alongX ? 0.07 : 0.05, frameMat, { x, y: GROUND + y, z, cast: false, receive: false }));
+    };
+    const zf = NB.z1 + 0.005, xf = NB.x0 + 0.005;
+    for (const x of [NB.x1 + 1.6, NB.x1 + 4.4, NB.x1 + 7.2]) win(x, 1.65, zf, 1.7, 1.5, true);
+    for (let i = 0; i < 3; i++) win(xf, 1.65, NB.z0 + 2.2 + i * (D - 4.4) / 2, 1.5, 1.5, false);
+    // on the roof: two plant boxes, as any low block has
+    group.add(box(1.6, 0.8, 1.1, toon(PAL.slateLight), at({ x: cx - 1.8, z: cz - 1.2, outline: 0.01 }, H + 0.7)));
+    group.add(box(1.0, 0.6, 1.0, toon(PAL.metal), at({ x: cx + 2.4, z: cz + 0.8, outline: 0.01 }, H + 0.6)));
+    // the lobby door: a dark frame, two frosted leaves that slide apart (site.lobby drives them), a canopy and a lamp
+    group.add(box(lobbyW + 0.24, 0.12, 0.2, frameMat, at({ x: lobbyX, z: NB.z1 + 0.02, outline: 0.006 }, doorH + 0.06)));
+    for (const sx of [-1, 1]) group.add(box(0.1, doorH, 0.2, frameMat, at({ x: lobbyX + sx * (lobbyW / 2 + 0.07), z: NB.z1 + 0.02, outline: 0.006 }, doorH / 2)));
+    group.add(box(lobbyW + 1.0, 0.12, 1.3, renderDark, at({ x: lobbyX, z: NB.z1 + 0.65 }, doorH + 0.45)));  // canopy
+    group.add(slabPlane(lobbyW + 0.5, 0.6, matte(0x6b6470), lobbyX, NB.z1 + 0.32, GROUND + 0.02));             // door mat
+  }
+  const leafMat = toon(0xc3ccd0), leaves = [];
+  for (const sx of [-1, 1]) {
+    const leaf = box(lobbyW / 2, doorH - 0.04, 0.05, leafMat, { x: lobbyX + sx * lobbyW / 4, y: GROUND + doorH / 2, z: NB.z1 - 0.08, outline: 0.006, receive: false });
+    leaf.userData.home = leaf.position.x; leaf.userData.dir = sx; leaf.userData.dynamic = true; group.add(leaf); leaves.push(leaf);
+  }
+  const lobby = { x: lobbyX, z: NB.z1, wantOpen: false, open: 0 };
+  const canopyLamp = toon(0xfff1c9, { emissive: 0xffd88a, emissiveIntensity: 0 });
+  group.add(box(0.5, 0.04, 0.24, canopyLamp, { x: lobbyX, y: GROUND + doorH + 0.37, z: NB.z1 + 0.7, cast: false, receive: false }));
+  pool(lobbyX, NB.z1 + 0.9, 1.6, 0.55);
+
   // warm light spilling from each lit back window onto the lawn behind, sheared like the office's sun pools
   const spillLen = 7.0, TURN = { back: 0, west: Math.PI / 2, front: Math.PI, east: -Math.PI / 2 };
   for (const o of office.openings || []) {
@@ -564,8 +615,10 @@ export function buildSite(scene, office) {
   const setNight = k => { for (const m of nightPools) { m.opacity = k * m.userData.nightOpacity; m.visible = k > 0.01; } };
   setNight(0);
 
-  // the walk from the street to the door, and the height of the ground along it
-  const approach = [{ x: px, z: sz0 + 0.8 }, { x: px, z: zDoor }, { x: -hx - 3.4, z: zDoor }, { x: door.outside.x, z: door.outside.z }];
+  // the walk from the street to the door, and the height of the ground along it: out of the lobby next door (3 m in,
+  // where nothing of anyone shows), along the pavement, up the path
+  const inside = { x: lobbyX, z: NB.z1 - 3.0 };
+  const approach = [inside, { x: lobbyX, z: NB.z1 - 0.3 }, { x: lobbyX + 0.4, z: sz0 + 0.8 }, { x: px, z: sz0 + 0.8 }, { x: px, z: zDoor }, { x: -hx - 3.4, z: zDoor }, { x: door.outside.x, z: door.outside.z }];
   const groundY = (x, z) => {
     if (x >= -hx - 3.0 && x <= -hx) return 0;                    // porch
     if (x > -hx - 3.4 && x < -hx - 3.0) return -0.1 - ((-hx - 3.0 - x) / 0.4) * 0.18; // steps
@@ -574,13 +627,21 @@ export function buildSite(scene, office) {
   let windT = 0;
   const update = dt => { // a gentle, irregular breeze: trees lean a degree or two, never in unison
     windT += dt;
+    // the lobby door slides open while someone is at it, and shuts behind them
+    const want = lobby.wantOpen ? 1 : 0;
+    if (lobby.open !== want) {
+      lobby.open = want > lobby.open ? Math.min(1, lobby.open + dt * 2.2) : Math.max(0, lobby.open - dt * 1.4);
+      for (const l of leaves) { l.position.x = l.userData.home + l.userData.dir * lobby.open * lobbyW / 2 * 0.92; l.updateMatrix(); l.updateMatrixWorld(); }
+    }
     const gust = 0.6 + 0.4 * Math.sin(windT * 0.23) * Math.sin(windT * 0.11 + 1);
     for (const t of trees) { const p = t.userData.phase; t.rotation.z = Math.sin(windT * 0.9 + p) * 0.018 * gust; t.rotation.x = Math.sin(windT * 0.7 + p * 1.3) * 0.012 * gust; }
   };
   group.userData.batch = freezeStatic(group);
   return {
-    group, update, approach, groundY, fadeZ: sz0 + 0.5, isOutdoor: (x) => x < -hx,
-    lampMats: [headMat, signFace, busMat], lampPos: lampSpots[0].clone(), lampSpots,
+    group, update, approach, groundY, lobby, isOutdoor: (x) => x < -hx,
+    /** inside next door, behind its walls: the only place anyone may fade in or out */
+    isHidden: (x, z) => x < NB.x0 && x > NB.x1 && z < NB.z1 - 0.4 && z > NB.z0,
+    lampMats: [headMat, signFace, busMat, canopyLamp], lampPos: lampSpots[0].clone(), lampSpots,
     nightPools, setNight,
   };
 }
