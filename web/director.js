@@ -34,16 +34,15 @@ export function breakAnim(style, from, elapsed) {
   return 'idle';
 }
 
-// the way in (web/site.js approach): along the pavement from beyond the picture's west edge, past next door, up the path
-// to the door mat. The walking times keep the pace they always had (5.5 s in, 8 s out for the old 10.9 m from the street),
-// over the real length; __office.check() fails if the built route and this number ever drift apart. Most of the pavement
-// is out of sight on an ordinary screen (all but 7-14 m of it on 16:9 or 16:10): the price of nobody appearing from
-// nowhere on the widest one.
-export const ENTRY_M = 38.99;
-const IN_WALK_S = ENTRY_M * 5.5 / 10.9;  // ~19.7 s from the west end of the pavement to the door mat
+// the way in (web/site.js approach): along the pavement from just beyond an ordinary picture's west edge, past next door,
+// up the path to the door mat. The walking times keep the pace they always had (5.5 s in, 8 s out for the old 10.9 m from
+// the street), over the real length; __office.check() fails if the built route and this number ever drift apart. Short on
+// purpose: a wider window walks them further at a brisker pace (Worker.streetEnd) rather than everyone waiting off-screen.
+export const ENTRY_M = 18.99;
+export const IN_WALK_S = ENTRY_M * 5.5 / 10.9;  // ~9.6 s from the west end of the pavement to the door mat
 const WIPE_S = 1.2;                       // feet on the mat
 const IN_GAP_MS = 450;                    // several arriving together walk in one after another, not as one
-const OUT_S = ENTRY_M * 8 / 10.9;         // ~28.6 s from the door back past the west edge
+const OUT_S = ENTRY_M * 8 / 10.9;         // ~13.9 s from the door back past the west edge
 const WALK_SPEED = 2.3;                   // m/s, a little under the tabs' 2.4: arrivals never miss their dwell
 const SETTLE_GAP_MS = 30000;              // a first update, or one after this long a silence: whoever is in was already in
 const ARRIVING_MS = 20000;                // ...unless their session started this recently

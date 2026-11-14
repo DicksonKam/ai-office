@@ -609,11 +609,11 @@ export function buildSite(scene, office) {
   setNight(0);
 
   // the walk from the street to the door, and the height of the ground along it: in along the pavement from the west,
-  // past next door, up the path. It starts 30.5 m short of the path, beyond the edge of the picture: with the ground floor
-  // in view no window shape shows more than 28.1 m of that pavement (__office.walkCheck, 1280x720 to 5120x1300 and
-  // phones). A very wide window looking at an upper floor shows more: there each tab starts the walk further along,
-  // beyond its own edge (Worker.streetEnd), and keeps to the planned time.
-  const westEnd = { x: px - 30.5, z: sz0 + 0.8 };
+  // past next door, up the path. It starts 10.5 m short of the path, just beyond the edge of an ordinary picture (a phone,
+  // 1280x800, 1512x860 and 1920x1080 show 0-9.5 m of that pavement): a short walk, so nobody is kept waiting off-screen.
+  // A window that shows more starts the walk further along, beyond its own edge, at a brisker pace that keeps to the
+  // planned time (Worker.streetEnd); past what a brisk walk can cover (21:9 and wider) they fade in far down the street.
+  const westEnd = { x: px - 10.5, z: sz0 + 0.8 };
   const approach = [westEnd, { x: px, z: sz0 + 0.8 }, { x: px, z: zDoor }, { x: -hx - 3.4, z: zDoor }, { x: door.outside.x, z: door.outside.z }];
   const groundY = (x, z) => {
     if (x >= -hx - 3.0 && x <= -hx) return 0;                    // porch

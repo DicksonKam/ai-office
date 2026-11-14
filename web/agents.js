@@ -11,13 +11,14 @@ import { NAMES, hash, pick, VENDOR } from './palette.js';
 import { iconFor } from './bubbles.js';
 import { setMode } from './ghost.js';
 import { buildSite } from './site.js';
-import { breakAnim } from './director.js';
+import { breakAnim, IN_WALK_S } from './director.js';
 import { waitingOnJob } from './jobs.js';
 const JOB_SWIVEL = -0.52; // the chair turned part of the way toward the laptop beside the desk; the head does the rest
 import { pulseJobLights } from './jobprops.js';
 import { stage } from './stage.js';
 
 const SPEED = 2.4;
+const BRISK = 2.6;  // m/s, the fastest walk in from a far start: within everyone's own range (2.1-2.7)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const STANDING = new Set(['brief', 'present', 'collect', 'byeWave', 'ambient', 'handover', 'review', 'meet', 'wipe']);
@@ -917,6 +918,7 @@ export class Worker {
         const site = m.site, lane = site ? ((this.traits?.fidget ?? 0.5) - 0.5) * 0.5 : 0;
         const start = site ? this.streetEnd(lane) : { x: door.outside.x - 0.9, z: door.outside.z };
         this.pos.set(start.x, 0, start.z); this.floor = 0;
+        if (site) this.fade = start.seen ? 0 : 1; // out of the picture: already there in full; in it (far down the street): fade in
         this.path = [...(site ? site.approach.slice(1) : []), door.inside].map((q, i) => ({ ...q, z: site && i === 0 ? q.z + lane : q.z, floor: 0 }));
         // at the pace that brings them onto the mat when the plan says (not minutes of foot-wiping after a quick walk)
         if (site) { let len = 0, p = start; for (const q of this.path) { len += Math.hypot(q.x - p.x, q.z - p.z); p = q; } this.inPace = len / (s.walk + 0.2); } this.next = 'wipe'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
@@ -987,12 +989,18 @@ export class Worker {
   /** walking pace, m/s: each their own, except on the way in, which keeps to the plan's arrival on the mat */
   pace() { return this.inPace || SPEED * (0.88 + this.traits.fidget * 0.24); }
   /** the west end of the pavement walk for this picture: the planned one, or further along on a window that shows more
-   *  of the street than planned for (a very wide one, looking at an upper floor) */
+   *  of the street than planned for, as far as a brisk walk covers in the planned time (beyond that, on 21:9 and wider,
+   *  they fade in far down the street) */
   streetEnd(lane = 0) {
     const site = this.mgr.site, a = site.approach[0], see = this.mgr.inPicture;
+    const way = [...site.approach, this.mgr.ground.door.inside]; // the walk in ends just inside the door
+    let route = 0; for (let i = 1; i < way.length; i++) route += Math.hypot(way[i].x - way[i - 1].x, way[i].z - way[i - 1].z);
+    const far = a.x - Math.max(0, BRISK * (IN_WALK_S + 0.2) - route);
+    const inView = x => see && [0.1, 1.2, 2.4].some(h => see(x + 1.0, site.groundY(x, a.z) + h, a.z + lane)); // a body's width (and its big head) clear of the edge
     let x = a.x;
-    while (see && x > -76 && [0.1, 1.2, 2.4].some(h => see(x + 0.6, site.groundY(x, a.z) + h, a.z + lane))) x -= 1;
-    return { x, z: a.z + lane };
+    while (x > far && inView(x)) x -= 0.5;
+    x = Math.max(x, far);
+    return { x, z: a.z + lane, seen: inView(x - 1.6) }; // seen: wholly inside the picture (at its edge they just walk in from the frame)
   }
   /** advance a walk by the time already gone (a walk the director counts as over is simply over) */
   catchUp(elapsed, walk) {
@@ -1086,7 +1094,7 @@ export class Worker {
       case 'leaveSite': { // back down the path to the street
         const site = this.mgr.site;
         if (!site) { this.finish(); break; }
-        const end = this.streetEnd();
+        const { x, z } = this.streetEnd(), end = { x, z };
         this.path = [...site.approach.slice(1, -1).reverse(), end].map(p => ({ ...p, floor: 0 })); this.next = 'gone'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
         break;
       }
@@ -1211,7 +1219,7 @@ export class Worker {
     const fadingOut = this.state === 'gone' || (this.state === 'walk' && this.next === 'gone' && this.floor === 0 &&
       (site ? this.path.length === 1 && this.pos.x < this.path[0].x + 1.0 : this.pos.x < this.mgr.ground.door.x - 0.4)) || // at the west end of the pavement, out of the picture
       (this.state === 'ambient' && this.ambientKind === 'wc' && this.timer > 0.5 && this.timer < (this.ambientDur || 8) - 0.5); // in the restroom: out of sight
-    this.fade += (fadingOut ? -3 : 3) * dt;
+    this.fade += (fadingOut ? -3 : this.state === 'walk' && this.next === 'wipe' ? 1.2 : 3) * dt; // in from far down the street (a very wide window): a slow fade, not a pop
     this.fade = clamp(this.fade, 0, 1);
     if (this.state === 'walk' && this.path[0]?.climb) this.fade = Math.min(this.fade, this.ascentFade()); // the last steps up to a floor you are not viewing
     if (this.tossAt && now >= this.tossAt) { this.tossAt = 0; if (this.reaction?.anim === 'slump') this.mgr.tossPaper(this); else this.crumpleLag = 0; }

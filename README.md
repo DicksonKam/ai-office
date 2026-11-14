@@ -180,9 +180,9 @@ fidgety, sleepy, cheerful, sociable, plant person) is derived from its id so the
 
 **The building and its life (staging, but physical):** the office sits on a site with a lawn, a street, a path up
 two steps to a glass porch, a sign, a bench and trees that sway in the breeze. Nobody appears out of thin air: people
-walk in along the pavement from beyond the edge of the picture, past the low building next door, and up the path, and
-go back the same way when they leave; they only fade in or out where nobody can see, past the picture's edge (each tab works
-out where its own edge is, so a very wide window looking at an upper floor sees no one appear either).
+walk in along the pavement from just beyond the edge of the picture, past the low building next door, and up the path
+(about 10 s), and go back the same way when they leave. Each tab works out where its own edge is: a wider window starts
+them further out at a brisker walk, and only on 21:9 and wider do they fade in, slowly, far down the street.
 Several arriving together walk in a moment apart. The office's door swings open before they reach it and
 springs shut behind them, and they wipe their feet on the mat. Their name tag, the counts and alerts never wait for
 the walk. `__office.walkCheck()` reports how far along the way in anyone could first be seen on this window. At night the
