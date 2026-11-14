@@ -34,14 +34,16 @@ export function breakAnim(style, from, elapsed) {
   return 'idle';
 }
 
-// the way in (web/site.js approach): out of the lobby next door, along the pavement, up the path to the door mat.
-// The walking times keep the pace they always had (5.5 s in, 8 s out for the old 10.9 m from the street), over the real
-// length; __office.check() fails if the built route and this number ever drift apart.
-export const ENTRY_M = 17.66;
-const IN_WALK_S = ENTRY_M * 5.5 / 10.9;  // ~8.9 s from the lobby to the door mat
+// the way in (web/site.js approach): along the pavement from beyond the picture's west edge, past next door, up the path
+// to the door mat. The walking times keep the pace they always had (5.5 s in, 8 s out for the old 10.9 m from the street),
+// over the real length; __office.check() fails if the built route and this number ever drift apart. Most of the pavement
+// is out of sight on an ordinary screen (all but 7-14 m of it on 16:9 or 16:10): the price of nobody appearing from
+// nowhere on the widest one.
+export const ENTRY_M = 38.99;
+const IN_WALK_S = ENTRY_M * 5.5 / 10.9;  // ~19.7 s from the west end of the pavement to the door mat
 const WIPE_S = 1.2;                       // feet on the mat
-const IN_GAP_MS = 450;                    // several arriving together leave the lobby one after another, not as one
-const OUT_S = ENTRY_M * 8 / 10.9;         // ~13 s from the door back into the lobby
+const IN_GAP_MS = 450;                    // several arriving together walk in one after another, not as one
+const OUT_S = ENTRY_M * 8 / 10.9;         // ~28.6 s from the door back past the west edge
 const WALK_SPEED = 2.3;                   // m/s, a little under the tabs' 2.4: arrivals never miss their dwell
 const SETTLE_GAP_MS = 30000;              // a first update, or one after this long a silence: whoever is in was already in
 const ARRIVING_MS = 20000;                // ...unless their session started this recently
@@ -117,10 +119,11 @@ export class Director {
     // parents first; a parent that helpers point to is a lead even if its own record still says member
     const depthOf = a => (Number.isFinite(a.depth) ? a.depth : a.parentId ? 1 : 0);
     const parents = new Set(agents.filter(a => a.parentId && ids.has(a.parentId) && a.role !== 'reviewer').map(a => a.parentId));
-    for (let a of [...agents].sort((x, y) => depthOf(x) - depthOf(y))) {
-      if (parents.has(a.id) && roleOf(a) === 'member') a = { ...a, role: 'lead' };
-      let r = this.recs.get(a.id);
-      if (!r) { r = this.newRec(a); this.recs.set(a.id, r); if (settling && !(now - a.startedAt < ARRIVING_MS)) this.settle(r); else { const since = Math.max(now, this.nextInAt || 0); this.nextInAt = since + IN_GAP_MS; this.setStep(r, { k: 'in' }, { walk: IN_WALK_S, since }); } continue; }
+    const ordered = [...agents].sort((x, y) => depthOf(x) - depthOf(y)).map(a => (parents.has(a.id) && roleOf(a) === 'member' ? { ...a, role: 'lead' } : a));
+    const admit = a => { const r = this.newRec(a); this.recs.set(a.id, r); if (settling && !(now - a.startedAt < ARRIVING_MS)) this.settle(r); else { const since = Math.max(now, this.nextInAt || 0); this.nextInAt = since + IN_GAP_MS; this.setStep(r, { k: 'in' }, { walk: IN_WALK_S, since }); } };
+    for (const a of ordered) {
+      const r = this.recs.get(a.id);
+      if (!r) { admit(a); continue; }
       this.applyAgent(r, a);
     }
     for (const r of this.recs.values()) {
@@ -131,6 +134,9 @@ export class Director {
     this.processEvents(events, settling);
     this.updateRooms();
     for (const r of [...this.recs.values()]) this.tick(r);
+    // back while still walking out: the one who left is out of sight now, and they come straight in again (no tick
+    // in which they are in but nowhere)
+    for (const a of ordered) if (!this.recs.has(a.id)) admit(a);
     this.pruneFloors();
     return this.plan();
   }
@@ -173,7 +179,7 @@ export class Director {
     }
     if (a.status === 'working' && r.readyAt && now - r.workAgainAt >= DEBOUNCE_MS) r.readyAt = 0; // really working again
     if (r.leaving) { // the session is back while the worker is on the way out: turn around, unless already out of the door
-      if (r.step?.k === 'out') return; // they finish leaving; the next snapshot brings a fresh arrival
+      if (r.step?.k === 'out') return; // they finish leaving, then come straight back in as a fresh arrival
       r.leaving = false; r.wavedBye = false; this.decide(r);
     }
   }

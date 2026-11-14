@@ -353,8 +353,13 @@ export class Overlay {
       const tx = (tr.l + tr.r) / 2, ty = tr.b - 1; // the placed (and kept-in-view) rectangle
       it.tag.style.transform = `translate(-50%, -100%) translate(${tx.toFixed(1)}px, ${ty.toFixed(1)}px)`;
       it.tag.style.zIndex = depth;
-      it.tag.style.opacity = w.fade * (r.tagFaded ? 0.8 : 1);
-      it.tag.classList.toggle('gone', !(w.fade > 0.05)); // walking in or out, not yet visible: no clicks, no hover
+      // out on the street beyond the picture's edge: no tag pinned to the window's side for someone not yet (or no
+      // longer) in it; it fades in as they walk into view
+      const dts = Math.min(0.1, Math.max(0, (now - (it.seenT ?? now)) / 1000)); it.seenT = now;
+      it.seen = Math.max(0, Math.min(1, (it.seen ?? (r.off && w.outdoors ? 0 : 1)) + (r.off && w.outdoors ? -4 : 4) * dts));
+      const vis = w.fade * it.seen;
+      it.tag.style.opacity = vis * (r.tagFaded ? 0.8 : 1);
+      it.tag.classList.toggle('gone', !(vis > 0.05)); // walking in or out, not yet visible: no clicks, no hover
     }
     // bubble sizes: only bubbles whose text or class changed, all read together (at most one layout per frame)
     for (const r of rows) {

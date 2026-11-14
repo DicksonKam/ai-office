@@ -125,10 +125,26 @@ test('someone gone says goodbye and leaves; back in time, they turn around; a le
   assert.equal(plan.workers.m.desk, null, 'the desk is free at once');
   plan = d.update([m], [], at());
   assert.equal(plan.workers.m.step.k, 'desk'); assert.equal(plan.workers.m.leaving, false);
-  for (let i = 0; i < 40; i++) plan = d.update([], [], at());
+  for (let i = 0; i < 60; i++) plan = d.update([], [], at()); // the bye, the door, the walk out past the picture's edge
   assert.equal(plan.workers.m, undefined, 'out of the door');
   plan = d.update([m], [], at());
   assert.equal(plan.workers.m.step.k, 'in', 'back later: a fresh arrival');
+});
+
+test('back while still walking out: in again the moment the walk out ends, never in but nowhere', () => {
+  const d = new Director({ seed: 4 });
+  const m = agent('m');
+  let t = 0; const at = () => T0 + (t += 1) * 1000;
+  d.update([m], [], at());
+  let plan;
+  for (let i = 0; i < 8; i++) plan = d.update([], [], at());
+  while (plan.workers.m?.step.k !== 'out') plan = d.update([], [], at());
+  for (let i = 0; i < 60; i++) {
+    plan = d.update([m], [], at());
+    assert.ok(plan.workers.m, `planned at every tick (${i})`);
+    if (plan.workers.m.step.k === 'in') return;
+  }
+  assert.fail('never came back in');
 });
 
 test('a break pose follows the clock alone, so every tab agrees', () => {

@@ -177,6 +177,10 @@ const nowhere = new THREE.OrthographicCamera(-0.01, 0.01, 0.01, -0.01, 0.1, 0.2)
 let lastDayKey = '', skyNow = { el: 60, az: 180 }, roomDirty = true, roomAt = 0;
 const mgr = new OfficeManager(scene, m => { fitCamera(m.office); needDaylight = true; renderFloors(m); });
 mgrRef = mgr; fitCamera(mgr.office); retarget(true); renderFloors(mgr);
+/** is this point inside the widest picture this window can show of the floor in view (auto-zoom only ever frames less)?
+ *  The way in starts beyond it, so nobody walks in out of thin air */
+const _pic = new THREE.Vector3();
+mgr.inPicture = (x, y, z) => { if (!fullView) return false; _pic.set(x, y, z).applyMatrix4(camInv); return _pic.x > fullView.left && _pic.x < fullView.right && _pic.y > fullView.bottom && _pic.y < fullView.top; };
 
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);

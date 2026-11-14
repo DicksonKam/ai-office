@@ -425,16 +425,13 @@ export class OfficeManager {
     this.propsT = (this.propsT || 0) + dt;
     if (this.propsT > 0.4) { this.propsT = 0; this.syncProps(now); }
     const g = this.ground;
-    let nearDoor = false, nearLobby = false;
-    const lobby = this.site?.lobby;
+    let nearDoor = false;
     for (const w of [...this.workers.values()]) {
       w.update(dt, now);
       if (w.state === 'walk' && w.floor === 0 && g.door && Math.abs(w.pos.z - g.door.z) < 1.4 && w.pos.x < g.door.x + 2.0 && w.pos.x > g.door.x - 2.6) nearDoor = true;
-      if (lobby && !w.done && w.floor === 0 && Math.abs(w.pos.x - lobby.x) < 1.3 && Math.abs(w.pos.z - lobby.z) < 1.7) nearLobby = true;
       if (w.done) this.workers.delete(w.id);
     }
     if (g.door) g.door.wantOpen = nearDoor;
-    if (lobby) lobby.wantOpen = nearLobby;
     for (const f of this.floors) f.update(dt);
     this.updateTosses(dt);
     pulseJobLights(now / 1000);
@@ -905,7 +902,7 @@ export class Worker {
     const s = p.step, m = this.mgr, prevK = this.planStep?.k, first = this.planSeq === null, c = this.chibi;
     const elapsed = (m.serverNow - s.since) / 1000, late = first || elapsed > LATE_S;
     this.planSeq = p.seq; this.planStep = s;
-    this.dropHolds();
+    this.dropHolds(); this.inPace = null;
     const f = s.f ?? 0, fl = m.floors[f] || m.ground, carry = this.isHelper ? 'laptop' : this.isReviewer ? 'clipboard' : null, door = m.ground.door;
     if (late && s.k !== 'in') { const from = this.placeOf(p.from); this.pos.set(from.x, 0, from.z); this.floor = from.f; this.y = 0; this.sittingOn = null; c.setPose('stand'); }
     if (first && s.k !== 'in') this.fade = 1;
@@ -915,12 +912,14 @@ export class Worker {
     this.planFloor = f;
     const toWorker = s.to ? m.workers.get(s.to) || null : null, desk = this.deskOf(f, s.d);
     switch (s.k) {
-      case 'in': { // up the path from the street to the door mat
-        const site = m.site, start = site ? site.approach[0] : { x: door.outside.x - 0.9, z: door.outside.z };
-        this.pos.set(start.x, 0, start.z); this.floor = 0;
+      case 'in': { // in along the pavement from beyond the picture, up the path to the door mat
         // on the pavement each keeps a lane of their own (a team arriving is a loose file, not one body)
-        const lane = ((this.traits?.fidget ?? 0.5) - 0.5) * 0.5;
-        this.path = [...(site ? site.approach.slice(1) : []), door.inside].map((q, i) => ({ ...q, z: site && (i === 1 || i === 2) ? q.z + lane : q.z, floor: 0 })); this.next = 'wipe'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
+        const site = m.site, lane = site ? ((this.traits?.fidget ?? 0.5) - 0.5) * 0.5 : 0;
+        const start = site ? this.streetEnd(lane) : { x: door.outside.x - 0.9, z: door.outside.z };
+        this.pos.set(start.x, 0, start.z); this.floor = 0;
+        this.path = [...(site ? site.approach.slice(1) : []), door.inside].map((q, i) => ({ ...q, z: site && i === 0 ? q.z + lane : q.z, floor: 0 }));
+        // at the pace that brings them onto the mat when the plan says (not minutes of foot-wiping after a quick walk)
+        if (site) { let len = 0, p = start; for (const q of this.path) { len += Math.hypot(q.x - p.x, q.z - p.z); p = q; } this.inPace = len / (s.walk + 0.2); } this.next = 'wipe'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
         break;
       }
       case 'desk': if (desk) this.sitAt(desk.chair, f); break;
@@ -985,10 +984,20 @@ export class Worker {
     this.walkSpent = 0;
     if (late || elapsed > CATCH_UP_S) { this.catchUp(elapsed, s.walk); this.walkSpent = elapsed; }
   }
+  /** walking pace, m/s: each their own, except on the way in, which keeps to the plan's arrival on the mat */
+  pace() { return this.inPace || SPEED * (0.88 + this.traits.fidget * 0.24); }
+  /** the west end of the pavement walk for this picture: the planned one, or further along on a window that shows more
+   *  of the street than planned for (a very wide one, looking at an upper floor) */
+  streetEnd(lane = 0) {
+    const site = this.mgr.site, a = site.approach[0], see = this.mgr.inPicture;
+    let x = a.x;
+    while (see && x > -76 && [0.1, 1.2, 2.4].some(h => see(x + 0.6, site.groundY(x, a.z) + h, a.z + lane))) x -= 1;
+    return { x, z: a.z + lane };
+  }
   /** advance a walk by the time already gone (a walk the director counts as over is simply over) */
   catchUp(elapsed, walk) {
     if (this.state === 'walk') {
-      const speed = SPEED * (0.88 + this.traits.fidget * 0.24);
+      const speed = this.pace();
       let left = elapsed >= walk ? Infinity : elapsed * speed;
       while (this.state === 'walk' && this.path.length) {
         const tgt = this.path[0], v = tgt.climb ? 0.6 : 1, d = Math.hypot(tgt.x - this.pos.x, tgt.z - this.pos.z), need = d / v;
@@ -1077,7 +1086,8 @@ export class Worker {
       case 'leaveSite': { // back down the path to the street
         const site = this.mgr.site;
         if (!site) { this.finish(); break; }
-        this.path = site.approach.slice(0, -1).reverse().map(p => ({ ...p, floor: 0 })); this.next = 'gone'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
+        const end = this.streetEnd();
+        this.path = [...site.approach.slice(1, -1).reverse(), end].map(p => ({ ...p, floor: 0 })); this.next = 'gone'; this.state = 'walk'; c.setPose('stand'); c.setAnim('walk');
         break;
       }
       case 'gone': this.finish(); break;
@@ -1199,7 +1209,7 @@ export class Worker {
     const c = this.chibi;
     const site = this.mgr.site;
     const fadingOut = this.state === 'gone' || (this.state === 'walk' && this.next === 'gone' && this.floor === 0 &&
-      (site ? site.isHidden(this.pos.x, this.pos.z) : this.pos.x < this.mgr.ground.door.x - 0.4)) || // back inside next door, out of sight
+      (site ? this.path.length === 1 && this.pos.x < this.path[0].x + 1.0 : this.pos.x < this.mgr.ground.door.x - 0.4)) || // at the west end of the pavement, out of the picture
       (this.state === 'ambient' && this.ambientKind === 'wc' && this.timer > 0.5 && this.timer < (this.ambientDur || 8) - 0.5); // in the restroom: out of sight
     this.fade += (fadingOut ? -3 : 3) * dt;
     this.fade = clamp(this.fade, 0, 1);
@@ -1233,7 +1243,7 @@ export class Worker {
         }
         // the walk keeps to the plan's clock, not to the frames this tab happened to get, so every tab has them at one
         // point: slowed behind someone, it makes the time up afterwards (at most at twice the pace)
-        const pace = SPEED * (0.88 + this.traits.fidget * 0.24) * (tgt.climb ? 0.6 : 1);
+        const pace = this.pace() * (tgt.climb ? 0.6 : 1);
         const owed = this.planStep ? (this.mgr.serverNow - this.planStep.since) / 1000 - (this.walkSpent || 0) : dt;
         const step = pace * clamp(owed, 0, dt * 2) * follow;
         this.walkSpent = (this.walkSpent || 0) + Math.min(dist, step) / pace;

@@ -180,9 +180,10 @@ fidgety, sleepy, cheerful, sociable, plant person) is derived from its id so the
 
 **The building and its life (staging, but physical):** the office sits on a site with a lawn, a street, a path up
 two steps to a glass porch, a sign, a bench and trees that sway in the breeze. Nobody appears out of thin air: people
-come out of the lobby of the low building next door (its door slides open as they reach it), walk along the pavement
-and up the path, and go back the same way when they leave; they only fade in or out inside it, behind solid walls.
-Several arriving together leave the lobby a moment apart. The office's door swings open before they reach it and
+walk in along the pavement from beyond the edge of the picture, past the low building next door, and up the path, and
+go back the same way when they leave; they only fade in or out where nobody can see, past the picture's edge (each tab works
+out where its own edge is, so a very wide window looking at an upper floor sees no one appear either).
+Several arriving together walk in a moment apart. The office's door swings open before they reach it and
 springs shut behind them, and they wipe their feet on the mat. Their name tag, the counts and alerts never wait for
 the walk. `__office.walkCheck()` reports how far along the way in anyone could first be seen on this window. At night the
 office is lit from inside (warm light from the ceiling that the cutaway removes, desk lamps only where someone works, the porch and street lamp on).
@@ -353,7 +354,7 @@ web/               Browser: Three.js scene
   dayboard.js      the day board on every floor (today's finished work from the journal)
   jobs.js, jobprops.js   what a job means for its worker; the desk laptop and kitchen timer that show it
   threads.js       team threads on the floor between a lead and its helpers
-  site.js          the grounds: lawn, street, path and steps, porch, sign, bench, street lamp, mixed trees, shrub beds, parked cars, bus shelter, the building next door and its lobby
+  site.js          the grounds: lawn, street, path and steps, porch, sign, bench, street lamp, mixed trees, shrub beds, parked cars, bus shelter, the building next door
   merge.js         static batching (per floor and per rigid part)
   toon.js          shared toon materials and ink outlines
   ghost.js         semi-transparent rendering for floors above the active one
