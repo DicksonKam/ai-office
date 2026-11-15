@@ -113,6 +113,7 @@ test('the Antigravity CLI: waiting for you, at work, a helper, idle; nothing lef
   conversationDb(path.join(conv, `${id(1)}.db`), [[14, 3, userInput('Convert the videos to mp4')], [15, 3, reply('Checking the folder first.')], [132, 9, toolCall('run_command', { CommandLine: 'ffmpeg -i a.webm a.mp4', toolSummary: 'Convert a.webm' })]]);
   conversationDb(path.join(conv, `${id(2)}.db`), [[14, 3, userInput('Read the notes')], [132, 2, toolCall('read_file', { Path: '/work/notes/todo.md' })]]);
   conversationDb(path.join(conv, `${id(3)}.db`), [[14, 3, userInput('Summarise the logs please')], [15, 3, reply('All done: three warnings, no errors.')]]);
+  conversationDb(path.join(conv, `${id(4)}.db`), [[14, 3, userInput('Before anything else, use your ask-question tool to ask me whether I prefer red or blue, and wait for my answer.')], [132, 9, toolCall('ask_question', { questions: [{ question: 'Do you prefer red or blue?', options: ['Red', 'Blue'] }] })]]);
   const sum = new DatabaseSync(path.join(home, 'conversation_summaries.db'));
   sum.exec('PRAGMA journal_mode = WAL');
   sum.exec("CREATE TABLE conversation_summaries (conversation_id text PRIMARY KEY, title text NOT NULL DEFAULT '', preview text NOT NULL DEFAULT '', workspace_uris text NOT NULL, status text NOT NULL DEFAULT '', parent_conversation_id text NOT NULL DEFAULT '', agent_name text NOT NULL DEFAULT '', killed numeric NOT NULL DEFAULT false, not_fully_idle numeric NOT NULL DEFAULT false, last_modified_time datetime NOT NULL)");
@@ -120,6 +121,7 @@ test('the Antigravity CLI: waiting for you, at work, a helper, idle; nothing lef
   const at = new Date().toISOString().replace('T', ' ').replace('Z', '000+00:00');
   row.run(id(1), '', 'Convert the videos to mp4', '["file:///work/video%20tools"]', 'CASCADE_RUN_STATUS_RUNNING', '', '', 0, 1, at);
   row.run(id(2), '', 'Read the notes', '["file:///work/video%20tools"]', 'CASCADE_RUN_STATUS_RUNNING', id(1), 'researcher', 0, 1, at);
+  row.run(id(4), '', '', '["file:///work/logs"]', 'CASCADE_RUN_STATUS_RUNNING', '', '', 0, 1, at);
   row.run(id(3), 'Log summary', 'Summarise the logs please', '["file:///work/logs"]', 'CASCADE_RUN_STATUS_IDLE', '', '', 0, 0, at);
   sum.close();
   const before = fs.readdirSync(home).concat(fs.readdirSync(conv)).sort();
@@ -127,7 +129,9 @@ test('the Antigravity CLI: waiting for you, at work, a helper, idle; nothing lef
   CONFIG.gemini.antigravity = home;
   try {
     const agents = await collectAntigravity(Date.now()), by = n => agents.find(a => a.id === `gemini:agy-${id(n)}`);
-    assert.equal(agents.length, 3);
+    assert.equal(agents.length, 4);
+    assert.equal(by(4).asking, 'Question for you: Do you prefer red or blue?');
+    assert.match(by(4).task, /^Before anything else, use your ask-question tool/, 'text that also reads as a nested record ("Be" = field 8, length 101) is kept whole');
     assert.equal(by(1).asking, 'Needs your OK: Running: Convert a.webm');
     assert.equal(by(1).status, 'working');
     assert.equal(by(1).project, 'video tools');

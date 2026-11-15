@@ -67,10 +67,13 @@ export function protoStrings(buf, depth = 0, out = []) {
     else if (wt === 2) {
       const [len, k] = varint(buf, i); if (len === null || k + len > buf.length) return out;
       const part = buf.subarray(k, k + len); i = k + len;
+      const s = part.toString('utf8'), text = len > 0 && !s.includes('�') && !/[\x00-\x08\x0e-\x1f]/.test(s);
       const nested = [];
       if (len > 1 && parsesAsMessage(part)) protoStrings(part, depth + 1, nested);
-      if (nested.length) out.push(...nested);
-      else { const s = part.toString('utf8'); if (len && !s.includes('�') && !/[\x00-\x08\x0e-\x1f]/.test(s)) out.push(s); }
+      out.push(...nested);
+      // plain text can happen to read as a message too ("Be" is field 8 and a length): keep it whole as well, unless it
+      // starts like one of the first fields (a control byte), which real text does not
+      if (text && (!nested.length || part[0] >= 0x20)) out.push(s);
     } else return out;
   }
   return out;
@@ -106,6 +109,13 @@ export function textOf(payload) {
   return best.trim();
 }
 
+const ASK_TOOLS = /^(ask_question|ask_user|ask_followup_question|request_user_input)$/;
+/** the question a question tool puts to you, or null */
+function questionOf(name, args = {}) {
+  if (!ASK_TOOLS.test(String(name || '').toLowerCase())) return null;
+  const q = Array.isArray(args.questions) ? args.questions[0] : args;
+  return snippet(String(q?.question || q?.Question || q?.prompt || q?.text || ''), 60) || 'it asked you something';
+}
 const pathArg = a => a.Path || a.AbsolutePath || a.TargetFile || a.FilePath || a.file_path || a.path || null;
 export function describeTool(name, args = {}) {
   const n = String(name || '').toLowerCase(), a = args || {};
@@ -119,6 +129,7 @@ export function describeTool(name, args = {}) {
   if (/search_web|web_search/.test(n)) return `Searching the web: ${snippet(a.query || a.Query || '', 44)}`;
   if (/read_url|web_fetch/.test(n)) { try { return `Reading ${new URL(a.Url || a.url).hostname}`; } catch { return 'Reading a web page'; } }
   if (/browser/.test(n)) return 'Using the browser';
+  if (ASK_TOOLS.test(n)) return `Asking you: ${questionOf(n, a)}`;
   if (/subagent|delegate/.test(n)) return `Delegating: ${snippet(a.Task || a.task || a.description || 'a side task', 48)}`;
   return `Using ${humanize(name) || 'a tool'}`;
 }
@@ -189,7 +200,9 @@ export function readSteps(rows) {
     if (t === STEP.USER_INPUT) { const text = textOf(p); if (text) info.firstUser = snippet(text, 60); } // oldest last: ends on the first
     if (st === WAITING && !info.asking) {
       const tool = t === STEP.GENERIC ? toolOf(p) : null;
-      info.asking = t === STEP.ASK_QUESTION ? `Question for you: ${snippet(textOf(p), 60) || 'it asked you something'}` : `Needs your OK: ${tool?.name ? describeTool(tool.name, tool.args) : 'a step'}`;
+      const q = tool && questionOf(tool.name, tool.args);
+      info.asking = t === STEP.ASK_QUESTION ? `Question for you: ${snippet(textOf(p), 60) || 'it asked you something'}`
+        : q ? `Question for you: ${q}` : `Needs your OK: ${tool?.name ? describeTool(tool.name, tool.args) : 'a step'}`;
     }
     if (UNDER_WAY.has(st)) info.underWay = true;
     if (t === STEP.GENERIC && info.touches.length < (CONFIG.links?.touchesMax ?? 20)) { const tool = toolOf(p); const tc = touchOf(tool.name, tool.args, st, null); if (tc) info.touches.push(tc); }
