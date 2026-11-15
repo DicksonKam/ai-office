@@ -18,6 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CONFIG } from '../config.js';
 import { snippet, basename, SeenMap, every } from '../tail.js';
+import { antigravityLedger } from '../output.js';
 
 const ASKING_WINDOW_MS = 30 * 60 * 1000;   // a step waiting for you writes nothing while it waits: look this far back
 const STEP = { USER_INPUT: 14, PLANNER_RESPONSE: 15, ERROR_MESSAGE: 17, GENERIC: 132, RUN_COMMAND: 21, VIEW_FILE: 8, CODE_ACTION: 5,
@@ -229,6 +230,9 @@ async function conversation(id, file, s, now) {
     const first = await query(file, s.sig, now, 'select idx, step_type, status, step_payload from steps where step_type = ? order by idx limit 1', [STEP.USER_INPUT]);
     const rows = [...recent]; for (const r of first) if (!rows.some(x => x.idx === r.idx)) rows.push(r);
     info = readSteps(rows);
+    // what it has made: every tool step of the conversation, oldest first
+    const tools = await query(file, s.sig, now, 'select idx, status, step_payload from steps where step_type = ? order by idx', [STEP.GENERIC]);
+    info.output = antigravityLedger(tools.map(r => { const p = r.step_payload ? Buffer.from(r.step_payload) : null; return { idx: r.idx, status: Number(r.status), tool: toolOf(p), texts: protoStrings(p) }; }));
   } catch { return hit?.info || null; } // caught mid-write: keep the last good read
   convCache.set(id, { sig: s.sig, info }, now);
   return info;
@@ -268,7 +272,7 @@ async function collectHome({ dir: home, host, kind }, now) {
       cwd, project: cwd ? basename(cwd) : 'Antigravity', model: null, branch: null,
       startedAt: s.bornMs || null, alive: true, status: working ? 'working' : 'idle', statusAt: activeAt, lastActivityAt: activeAt,
       thought: info.thought ? { ...info.thought, at: activeAt } : null, parentId: lead ? `gemini:agy-${lead}` : null,
-      waiting: false, asking: info.asking, events: [],
+      waiting: false, asking: info.asking, events: [], output: info.output || null,
       pid: null, touches: info.touches.map(t => ({ ...t, at: activeAt })), // no pid on record; cwd lets the process reader try a weak join
     });
   }

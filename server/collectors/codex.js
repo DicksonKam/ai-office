@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { codexThreadLink } from '../open.js';
 import { CONFIG } from '../config.js';
+import { ledgerOf, codexLine } from '../output.js';
 import { readTail, parseJsonl, snippet, basename, SeenMap, every } from '../tail.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { nextOccurrence } from '../rrule.js';
@@ -432,6 +433,7 @@ export async function collectCodex(now) {
         ? (status === 'working' ? { kind: 'think', text: 'Reviewing the latest work for risks…', at: lastActivity } : { kind: 'say', text: 'Review done.', at: lastActivity })
         : info?.thought || null,
       parentId, agentPath, waiting: !!(status === 'working' && info?.waiting), asking, verdict: info?.verdict || null, events,
+      output: r.rollout_path ? await ledgerOf(r.rollout_path, codexLine, now) : null,
       pid: null, touches: resolveTouches(info?.touches, r.cwd), // no pid on record (see the note above)
       // for model.js (not kept in the snapshot): the turn is open; its newest own call still runs; a helper thread was
       // closed (turn_aborted). A lead with an open turn, nothing of its own running and helpers at work is waiting on them;

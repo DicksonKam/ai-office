@@ -144,7 +144,10 @@ tag to read them) and a tag rings briefly when something new happens to that wor
 | What you see | Real data behind it |
 | --- | --- |
 | Light strip on the back of a monitor: steady brand colour / slow pulse / amber / red blink / dim / grey | working / thinking / waiting on helpers / tool error in the last 8 s / idle at the desk / away on a break |
-| Paper stack beside the monitor grows | how long the session has been running |
+| Sheets landing in the wire out-tray, one per reach (past twelve the pile grows in steps) | one per file the session really wrote (Edit / Write, apply_patch, write_file …), however often each was written |
+| A three-lamp light on a post at the desk's back-right corner: green / red, the amber lamp blinking | the last test run's real result (the runner's own summary, else its exit code if no pipe hid it) / a test running now; dark until a test has run |
+| Binders standing along the desk's right end, then box files on the floor beside it | one per `git commit` that succeeded (five binders, then a box file for every further five) |
+| Someone leaving goes back to their desk, gathers the sheets and binders and carries them out | they made something today and their session ended |
 | Crumpled paper in and around the desk bin | one per tool error the session hit |
 | Jacket over the chair, screen locked | owner is on a break but still in the office (the desk is cleared when they leave) |
 | Pod sign on the desk's front panel | the team's real project |
@@ -254,6 +257,7 @@ becomes yours. Hover either name tag to see the line between them.
   for the one below. Walls rise to the underside of the slab above;
   people step up tread by tread. While the floor above is unused, a faint plate marks where the flight arrives.
 - Work that goes on after a turn is shown too: a worker waiting on a background job or a timer rests at their desk with the chair turned to an open laptop, instead of going to the lounge, and does not leave while it runs. Schedules are listed in the Teams panel and on the day board. Any tool can report jobs: see "Jobs from any tool" in AGENT_COMMUNICATION.md.
+- The worker card's **Made so far** line counts what the session really made ("6 files written · tests 4 passed, 1 failed · 2 commits"); the office log notes each commit and each failed test run.
 - The worker card has an **Open this chat** button where a tool can really be taken to that chat: today, Claude Desktop and Codex (a helper opens its lead's chat). It only takes you there; nothing is sent. The same is one click from the office: hover a name tag and a small **↗** appears at its end (not on touch screens, where the card's button does it). Agents that cannot be opened simply have no button. Local office only.
 - A chat started by another chat shows it: a `↗ Name` chip on its tag, a desk nearby when one is free, and a line on hover. Two chats merely in the same folder are not linked.
 - The sun is the real sun over the place you set (Hong Kong unless you set `AI_OFFICE_LAT` and `AI_OFFICE_LON`): it moves with the time and the season, and sunrise, sunset and the lamps follow it. After sunset the garden falls slowly through a blue hour while the lamps take over the room. Light
@@ -302,7 +306,7 @@ which transforms the parent (it once tilted the whole building).
 - **Worker card** (click anyone, or Tab / Shift+Tab through the people on the floor; Esc closes): a strip of their day,
   first seen and time worked today, their last five real actions with times, their team (click to jump), time in
   the office and the project.
-- `npm test` runs the week-digest, collector, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin, audit, film, uptime and HUD-fit tests.
+- `npm test` runs the week-digest, collector, output, links, delegation, midnight-rollover, director, sun, openings, jobs, request-origin, audit, film, uptime and HUD-fit tests.
 - `npm run build:pages` builds that public demo as plain files in `dist-pages/`, with nothing from `server/`; a push to `main` publishes it after the tests pass. It tracks nobody, and if a visitor's machine struggles it gives up detail by itself (`web/autoquality.js`).
 - `npm run audit` compares the day journal with what the agents' own records say happened (Claude Code and Codex): false workers, missed work, how late the office noticed, and "waiting on you" that was wrong or missing. It reads times and record types only, and runs no AI. `-- --by-day` splits it.
 - `npm run smoke` starts the real server with an empty home folder and checks that it comes up, serves the page and refuses other web sites.
@@ -318,8 +322,8 @@ which transforms the parent (it once tilted the whole building).
 - Static scenery is batched (`web/merge.js`): once a floor is built, everything that never moves is merged into one
   mesh per material family, with plain colours baked into vertex colours. Chairs, lead kits, the cat and each
   character's limbs are batched as rigid parts. **Anything that moves, toggles visibility, scales or is rebuilt
-  must sit under an object flagged `userData.dynamic`**, or it will be frozen in place. Desk props (paper stack,
-  crumples, report pile, personal item, jacket, pod sign) and helper desks are merged again after each change. People
+  must sit under an object flagged `userData.dynamic`**, or it will be frozen in place. Desk props (out-tray sheets,
+  binders, crumples, report pile, personal item, jacket, pod sign) and helper desks are merged again after each change. People
   on the floors you are not looking at are drawn as one merged snapshot of their pose (an impostor), rebuilt when they
   sit, stand or change what they hold. A full crowd (4 floors, about 50 people) at night runs at about 75 fps on the
   ground floor and about 70 fps on an upper floor (the old, shorter plan ran at 42 fps before batching). Interior
@@ -342,6 +346,7 @@ server/            Node: collectors → snapshot (agents, teams, events) → Web
   collectors/gemini.js   Gemini CLI logs and chat recordings
   collectors/antigravity.js  Antigravity conversations (Gemini app agents, agy CLI), read from a copy
   journal.js             day journal (data/journal), /api/today, /api/journal, /api/film
+  output.js              what each session made: files written, test runs and their verdicts, commits (counts only, read incrementally)
   uptime.js              when the office was running (data/uptime.json): a film hatches the rest
   links/                 link readers: declared (the open format in LINKS.md, from ~/.ai-office/links), process ancestry; the resolver
   jobbook.js, rrule.js, jobdrop.js   background jobs, timers and schedules from any tool (~/.ai-office/jobs)
@@ -359,6 +364,7 @@ web/               Browser: Three.js scene
   demofilm.js      the made-up day the public demo replays
   dayboard.js      the day board on every floor (today's finished work from the journal)
   jobs.js, jobprops.js   what a job means for its worker; the desk laptop and kitchen timer that show it
+  outputprops.js   what each agent made, on its desk: the out-tray, the test light, binders and box files
   threads.js       team threads on the floor between a lead and its helpers
   site.js          the grounds: lawn, street, path and steps, porch, sign, bench, street lamp, mixed trees, shrub beds, parked cars, bus shelter, the building next door
   merge.js         static batching (per floor and per rigid part)

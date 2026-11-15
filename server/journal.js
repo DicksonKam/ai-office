@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { CONFIG } from './config.js';
+import { hasOutput } from './output.js';
 
 const PENDING_MAX = 20000; // journal lines held while the drive is away (a few days of a busy office)
 const TOP_KINDS = new Set(['desktop', 'cli']);
@@ -140,6 +141,7 @@ export class Journal {
     this.seenEvents = new Map(); // event id -> t first written (kept ~1 day, survives the midnight rotation)
     this.date = null;
     this.seats = new Map();      // id -> the desk or pod seat last written (a film puts people back where they really sat)
+    this.outputs = new Map();    // id -> what it had made when last written (counts only), so a film shows the same desk
     this.caches = new Map();     // date -> FileCache
     this.todayMemo = { key: null, value: null };
     this.failures = 0;
@@ -265,6 +267,20 @@ export class Journal {
       out.push({ t: now, kind: 'seat', id, ...seat });
     }
     for (const id of this.seats.keys()) if (!cur.has(id)) this.seats.delete(id);
+
+    // what each one has made so far, when that changes: counts only (files written, tests passed / failed and the last
+    // run's result, a test running now, commits), never a file name, command or message
+    if (rotated) this.outputs.clear();
+    for (const [id, a] of cur) {
+      const o = a.output;
+      if (!hasOutput(o)) continue;
+      const counts = { files: o.files, pass: o.tests.pass, fail: o.tests.fail, last: o.tests.last, running: !!o.tests.running, commits: o.commits };
+      const key = JSON.stringify(counts);
+      if (this.outputs.get(id) === key) continue;
+      this.outputs.set(id, key);
+      out.push({ t: now, kind: 'output', id, output: counts });
+    }
+    for (const id of this.outputs.keys()) if (!cur.has(id)) this.outputs.delete(id);
 
     // interaction events, the first time each id is seen
     for (const ev of snap.events || []) {

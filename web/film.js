@@ -39,6 +39,11 @@ export function applyLine(agents, e) {
     case 'role-change': if (!a) return false; a.role = e.role || null; return true;
     case 'asking-start': if (!a) return false; a.asking = e.text || 'asking'; a.askTo = e.askTo || null; return true;
     case 'asking-end': if (!a) return false; a.asking = null; a.askTo = null; return true;
+    case 'output': { // what they had made by then: the same desk the live office showed
+      const o = e.output; if (!a || !o) return false;
+      a.output = { files: o.files | 0, tests: { pass: o.pass | 0, fail: o.fail | 0, last: o.last || null, lastAt: null, running: !!o.running }, commits: o.commits | 0, commitAt: null };
+      return true;
+    }
     default: return false;
   }
 }

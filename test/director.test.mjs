@@ -131,6 +131,27 @@ test('someone gone says goodbye and leaves; back in time, they turn around; a le
   assert.equal(plan.workers.m.step.k, 'in', 'back later: a fresh arrival');
 });
 
+test('leaving with work on the desk: back to it to pack up, then out; with nothing made, straight out', () => {
+  const d = new Director({ seed: 4 });
+  const made = agent('m', { output: { files: 3, tests: { pass: 1, fail: 0, last: 'pass', running: false }, commits: 1 } }), none = agent('n');
+  let t = 0; const at = () => T0 + (t += 1) * 1000;
+  d.update([made, none], [], at());
+  let plan;
+  for (let i = 0; i < 8; i++) plan = d.update([], [], at());
+  const steps = { m: [], n: [] };
+  for (let i = 0; i < 30; i++) { plan = d.update([], [], at()); for (const id of ['m', 'n']) { const k = plan.workers[id]?.step.k; if (k && steps[id].at(-1) !== k) steps[id].push(k); } }
+  assert.deepEqual(steps.n.slice(0, 2), ['exit', 'out']);
+  assert.ok(steps.m.indexOf('exit') > -1, 'out in the end');
+  const d2 = new Director({ seed: 4 });
+  d2.update([made], [], T0 + 1000);
+  let p2; for (let i = 2; i < 10; i++) p2 = d2.update([], [], T0 + i * 1000);
+  assert.equal(p2.workers.m.step.k, 'pack', 'first to the desk');
+  assert.ok(p2.workers.m.desk, 'the desk is still theirs while they pack');
+  for (let i = 10; i < 16; i++) p2 = d2.update([], [], T0 + i * 1000);
+  assert.equal(p2.workers.m.step.k === 'exit' || p2.workers.m.step.k === 'out', true, 'then out');
+  assert.equal(p2.workers.m.desk, null, 'and the desk is free');
+});
+
 test('back while still walking out: in again the moment the walk out ends, never in but nowhere', () => {
   const d = new Director({ seed: 4 });
   const m = agent('m');

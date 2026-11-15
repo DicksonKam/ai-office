@@ -15,6 +15,7 @@ import { breakAnim, IN_WALK_S } from './director.js';
 import { waitingOnJob } from './jobs.js';
 const JOB_SWIVEL = -0.52; // the chair turned part of the way toward the laptop beside the desk; the head does the rest
 import { pulseJobLights } from './jobprops.js';
+import { sheetsFor, bindersFor, lightFor, pulseTestLights } from './outputprops.js';
 import { stage } from './stage.js';
 
 const SPEED = 2.4;
@@ -361,10 +362,10 @@ export class OfficeManager {
       const away = !atDesk && w.idle && w.state !== 'meet';
       const mode = w.asksYou ? 'asking' : w.agent.askTo ? 'waiting' : away ? 'away' : w.idle ? 'idle' : now - (w.lastErrorAt || -1e9) < 8000 ? 'error'
         : w.agent.waiting ? 'waiting' : w.agent.thought?.kind === 'think' ? 'thinking' : 'working';
-      const start = w.agent.startedAt || w.firstSeen || (w.firstSeen = stage.wall());
-      d.setWorkState({ mode, accent: VENDOR[w.look.vendorKey]?.accent ?? 0xffffff, away, minutes: (stage.wall() - start) / 60000,
+      d.setWorkState({ mode, accent: VENDOR[w.look.vendorKey]?.accent ?? 0xffffff, away,
         errors: Math.max(0, (w.errors || 0) - (w.crumpleLag || 0)), project: w.agent.project || '' }); // a tossed page joins the bin when it lands
       for (; (w.reportsShown || 0) < (w.reports || 0); w.reportsShown = (w.reportsShown || 0) + 1) d.addReport?.(); // the sheets in the in-tray, however late the tab opened
+      this.syncOutput(w, d, now);
       const g = w.agent.delegator ? w.giver : null; // a work order on the monitor while another agent's work is on the desk
       d.setWorkOrder(g ? { color: VENDOR[g.look.vendorKey]?.accent ?? 0x9aa0b0, guess: !w.agent.delegator.certain } : null);
     }
@@ -403,6 +404,31 @@ export class OfficeManager {
   }
   /** workers whose real session finished and is waiting for you to pick it up (for the HUD) */
   readyList(now = stage.perf()) { return this.list.filter(w => w.isReady(now)); }
+  /** What they have really made (agent.output), on their desk: a sheet in the out-tray per file written, a binder per
+   *  commit, each put down by hand, one per reach, while they sit there; never more than three behind (a burst of edits,
+   *  a tab back from the background); a tab that first sees the desk places it at once. The test light just shows. */
+  syncOutput(w, d, now) {
+    if (!d.outKit) return;
+    const o = w.agent.output, light = lightFor(o);
+    if (w.outGathered) { d.outKit.set({ sheets: 0, binders: 0, ...light }); return; } // picked up on the way out
+    if (w.planStep?.k === 'pack') { // leaving: one reach gathers the lot into their arms
+      const seated = w.state === 'work' && w.sittingOn === d.chair && (!w.reaction || w.reaction.ambient);
+      if (w.outPack && now >= w.outPack) { w.outPack = null; if (w.gatherOutput()) w.chibi.setProp('papers'); return; }
+      if (!w.outPack && seated) { w.react('reach', 1.1); w.outPack = now + 450; }
+      return;
+    }
+    const want = { sheets: sheetsFor(o?.files || 0), binders: bindersFor(o?.commits || 0) };
+    const shown = w.outShown || (w.outShown = { ...want }); // first sight: as it is
+    shown.sheets = Math.min(shown.sheets, want.sheets); shown.binders = Math.min(shown.binders, want.binders); // fewer (a replay going back): at once
+    if (w.outPut && now >= w.outPut.at) { shown[w.outPut.what]++; w.outPut = null; w.outNextAt = now + 700; }
+    const free = w.state === 'work' && w.sittingOn === d.chair && (!w.reaction || w.reaction.ambient);
+    if (!w.outPut && free && now >= (w.outNextAt || 0)) {
+      const what = want.binders > shown.binders ? 'binders' : want.sheets > shown.sheets ? 'sheets' : null;
+      if (what) { w.react('reachL', 1.1); w.outPut = { what, at: now + 450 }; } // the tray and the binders are on their left
+    }
+    for (const k of ['sheets', 'binders']) if (want[k] - shown[k] > 3) shown[k] = want[k] - 3;
+    d.outKit.set({ ...shown, ...light });
+  }
   /** a crumpled page arcs from the worker's hand into the desk bin */
   tossPaper(w) {
     const d = w.desk;
@@ -435,7 +461,7 @@ export class OfficeManager {
     if (g.door) g.door.wantOpen = nearDoor;
     for (const f of this.floors) f.update(dt);
     this.updateTosses(dt);
-    pulseJobLights(now / 1000);
+    pulseJobLights(now / 1000); pulseTestLights(now / 1000);
     for (const fl of this.activeFlags || []) { // pop up, then a gentle sway
       fl.t += dt;
       const k = Math.min(1, fl.t / 0.45), over = 1 + Math.sin(k * Math.PI) * 0.18;
@@ -795,6 +821,15 @@ export class Worker {
     if (seat.approach) this.goTo(seat.approach, 'toSeat', facing, seat, seat.floor); else this.goTo(seat, 'toSeat', facing, null, seat.floor);
   }
   setMug(v) { this.desk?.setMug(v); this.deskMug = !!(v && this.desk); }
+  /** leaving from their desk: they take what they made with them (the desk's sheets and binders go into their arms);
+   *  'papers' to carry, or null when there is nothing on the desk or they are not at it */
+  gatherOutput() {
+    if (this.outGathered) return 'papers';
+    const d = this.desk;
+    if (!d?.outKit || d.owner !== this || this.sittingOn !== d.chair || !(d.outKit.sheets + d.outKit.binders)) return null;
+    this.outGathered = true; d.outKit.set({ sheets: 0, binders: 0 });
+    return 'papers';
+  }
   releaseDesk() { if (this.desk) { this.desk.taken = null; this.desk.setOwner(null); this.desk.setOccupant(null); this.setMug(false); this.desk.setLead(false); this.desk = null; } }
   releaseSlot() { if (this.slot) { this.slot.seat.taken = null; this.slot.pod.removeHelperDesk(this.slot.index); this.slot = null; } } // the seat holds the reservation (clearing it on the wrapper leaked every seat ever taken)
   releaseSeat() { if (this.seat) { this.seat.taken = false; this.seat = null; } }
@@ -925,6 +960,7 @@ export class Worker {
         break;
       }
       case 'desk': if (desk) this.sitAt(desk.chair, f); break;
+      case 'pack': if (desk) this.sitAt(desk.chair, f); break; // back to their desk to pack up what they made, then out (syncOutput)
       case 'slot': { const seat = desk?.slots[s.i]; if (seat) this.sitAt(seat, f); break; }
       case 'stretch':
         if (desk && this.sittingOn !== desk.chair) { this.sitAt(desk.chair, f); this.catchUp(Infinity, 0); }
@@ -978,8 +1014,8 @@ export class Worker {
         if (spot) { spot.taken = this; this.ambientSpot = spot; this.goTo(spot, 'ambient', spot.facing, null, f); }
         break;
       }
-      case 'bye': c.setProp(carry); if (desk) this.goToShared(desk.briefSpot, 'byeWave', f); break;
-      case 'exit': c.setProp(carry); this.goToShared(door.inside, 'exitWave', 0); break; // each leaver waves from their own spot by the door, not all on one point
+      case 'bye': c.setProp(this.gatherOutput() || carry); if (desk) this.goToShared(desk.briefSpot, 'byeWave', f); break;
+      case 'exit': c.setProp(this.gatherOutput() || carry); this.goToShared(door.inside, 'exitWave', 0); break; // each leaver waves from their own spot by the door, not all on one point
       case 'out': this.goTo(door.outside, m.site ? 'leaveSite' : 'gone', null, null, 0); break;
       default: break;
     }

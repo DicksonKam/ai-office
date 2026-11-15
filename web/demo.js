@@ -49,6 +49,24 @@ function addDemoJobs(agents, crowd) {
   }
 }
 
+// What each demo agent has made (as server/output.js would report it): files every 6-20 s of its time in, a test run
+// every 30-50 s (6 s running, mostly passing), a commit every 60-120 s. The same for the same agent and moment, so every
+// tab agrees. Reviewers make nothing.
+const demoHash = s => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
+function addDemoOutput(agents) {
+  const now = Date.now();
+  for (const a of agents) {
+    if (a.kind === 'guardian' || a.role === 'reviewer' || !a.startedAt) continue;
+    const h = demoHash(a.id), s = Math.max(0, (now - a.startedAt) / 1000);
+    const filesEvery = 6 + h * 14, testEvery = 30 + h * 20, commitEvery = 60 + ((h * 7) % 1) * 60;
+    const runs = Math.floor(s / testEvery), into = s - runs * testEvery, running = runs > 0 && into < 6;
+    const done = running ? runs - 1 : runs;
+    let pass = 0, fail = 0, last = null;
+    for (let k = 1; k <= done; k++) { const ok = demoHash(`${a.id}:t${k}`) > 0.2; if (ok) pass++; else fail++; last = ok ? 'pass' : 'fail'; }
+    a.output = { files: Math.floor(s / filesEvery), tests: { pass, fail, last, lastAt: null, running }, commits: Math.floor(s / commitEvery), commitAt: null };
+  }
+}
+
 /** ?demo&crowd=N : N top-level agents (leads with helpers, solo members, reviewers) arriving every couple of seconds.
  *  &reviewers: every lead gets a reviewer and reviews last longer (a busy review room: more reviewers than seats). */
 export function startCrowdDemo(onSnapshot, n = 24, { reviewers = false } = {}) {
@@ -118,7 +136,7 @@ export function startCrowdDemo(onSnapshot, n = 24, { reviewers = false } = {}) {
     const ev = events.filter(e => s >= e.at && s < e.at + 170).map(e => ({ ...e, at: t0 + e.at * 1000 }));
     const teamIds = [...new Set(agents.map(a => a.teamId))];
     const teams = teamIds.map(tid => ({ id: tid, lead: tid, members: agents.filter(a => a.teamId === tid && a.id !== tid && a.role !== 'reviewer').map(a => a.id), reviewers: agents.filter(a => a.teamId === tid && a.role === 'reviewer').map(a => a.id) }));
-    addDemoJobs(agents, true);
+    addDemoJobs(agents, true); addDemoOutput(agents);
     onSnapshot({ type: 'snapshot', now: Date.now(), agents, events: ev, teams, config: DEMO_CONFIG, schedules: demoSchedules() });
   }
   tick();
@@ -257,7 +275,7 @@ export function startDemo(onSnapshot, { scene = null } = {}) {
     const ev = events.filter(e => s >= e.at && s < e.at + 170 && (!ONLY || [e.from, e.to].every(x => !x || ONLY.has(x)))).map(e => ({ ...e, at: t0 + (e.at - SKIP) * 1000 }));
     const teamIds = [...new Set(agents.map(a => a.teamId))];
     const teams = teamIds.map(tid => ({ id: tid, lead: tid, members: agents.filter(a => a.teamId === tid && a.id !== tid && a.role !== 'reviewer').map(a => a.id), reviewers: agents.filter(a => a.teamId === tid && a.role === 'reviewer').map(a => a.id) }));
-    addDemoJobs(agents, false);
+    addDemoJobs(agents, false); addDemoOutput(agents);
     onSnapshot({ type: 'snapshot', now: Date.now(), agents, events: ev, teams, config: DEMO_CONFIG, schedules: demoSchedules() });
   }
   tick();

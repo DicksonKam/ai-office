@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { CONFIG } from '../config.js';
+import { ledgerOf, geminiLine } from '../output.js';
 import { readTail, readHead, parseJsonl, snippet, basename, SeenMap, every, readdirCached, statCached } from '../tail.js';
 
 const HOME = os.homedir();
@@ -393,6 +394,7 @@ export async function collectGemini(now) {
         cwd, project: cwd ? basename(cwd) : (/^[0-9a-f]{64}$/.test(d.name) ? 'Gemini' : d.name), model: info.model, branch: null,
         startedAt: info.startedAt, alive: true, status: s.status, statusAt: s.statusAt, lastActivityAt: s.activeAt,
         thought: info.thought, parentId: lead ? `gemini:${lead}` : null, waiting: false, asking: s.asking, events: [],
+        output: file.endsWith('.jsonl') ? await ledgerOf(file, geminiLine, now) : null,
         pid: null, touches: info.touches || [], // no pid on record; cwd + startedAt let the process reader try a weak join
       });
     }

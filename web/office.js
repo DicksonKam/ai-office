@@ -9,6 +9,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { freezeStatic } from './merge.js';
 import { windowPlan, wallGeometry, shellGeometry, wallPoint, barsOf } from './openings.js';
 import { buildJobKit } from './jobprops.js';
+import { buildOutputKit } from './outputprops.js';
 import { setMode as setDisplayMode, disposeVariants } from './ghost.js';
 import { paintDayBoard, DAYBOARD_W, DAYBOARD_H } from './dayboard.js';
 
@@ -2269,11 +2270,12 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
     cloth.add(mesh(new THREE.ShapeGeometry(tri), toon(PAL.mustard, { side: THREE.DoubleSide }), { outline: 0.006 })); }
   cloth.userData.dynamic = true; { const v = flag.visible; flag.visible = true; freezeStatic(flag); flag.visible = v; }
   const own = new THREE.Group(); own.userData.dynamic = true; g.add(own);
+  // what the owner has really made: sheets in the out-tray, the test light, binders for commits (outputprops.js)
+  const outKit = buildOutputKit(g, own, { toon, PAL, applyMode: node => reapplyMode(group, node), seed: row * 7 + col * 13 + level * 5 });
   // a work order clipped over the desk's front edge (the side the room sees), left of the plaque: another agent gave
   // the owner this work
   const order = new THREE.Group(); order.position.set(0.5, 0.75 - 0.2, 0.405); order.rotation.z = 0.04; order.visible = false; own.add(order);
   let orderKey = '';
-  const stack = new THREE.Group(); own.add(stack);        // paper stack: grows with how long the session has been working
   const crumples = new THREE.Group(); own.add(crumples);  // crumpled paper in / around the bin: one per tool error
   const jacket = new THREE.Group(); jacket.visible = false; swivel.add(jacket); // left on the chair while on a break
   // in-tray on the desk's left wing: printouts helpers handed in (real reports)
@@ -2282,8 +2284,8 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
   for (const [w, d, x, z] of [[0.27, 0.012, 0, -0.17], [0.27, 0.012, 0, 0.17], [0.012, 0.34, -0.135, 0], [0.012, 0.34, 0.135, 0]]) tray.add(box(w, 0.045, d, toon(PAL.slateDark), { x, y: 0.022, z, cast: false }));
   const reports = new THREE.Group(); reports.position.set(-0.86, 0.757, -0.12); reports.rotation.y = 0.2; own.add(reports);
   let reportN = 0;
-  let personal = null, stackN = -1, crumpleN = -1;
-  const paperMat = toon(PAL.paper), folderMats = [toon(PAL.sage), toon(PAL.mustard), toon(PAL.slate)], crumpleMat = new THREE.MeshLambertMaterial({ color: 0xf1ede4, flatShading: true });
+  let personal = null, crumpleN = -1;
+  const crumpleMat = new THREE.MeshLambertMaterial({ color: 0xf1ede4, flatShading: true });
   const ledTmp = new THREE.Color();
   let occupant = null;
   const paintSecondScreen = () => { // the second screen comes on for someone leading a team from this desk
@@ -2298,13 +2300,13 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
     briefSpot: { x: cx - 1.15, z: cz + 1.6, facing: Math.PI / 2 },
     reviewSpot: { x: cx, z: cz - 1.15, facing: 0.35, taken: null },
     slots, glowTarget: 0, t: 0,
-    owner: null, led: null, chairTarget: -0.56, chairSwivel: 0, jobKit,
+    owner: null, led: null, chairTarget: -0.56, chairSwivel: 0, jobKit, outKit,
     setChairOut(v) { this.chairTarget = v ? -0.78 : -0.56; },
     setOwner(worker) {
       if (this.owner === worker) return;
       this.owner = worker; this.led = null;
       if (personal) { own.remove(personal); clearProps(personal); personal = null; }
-      flag.visible = false;  clearProps(reports); reportN = 0; clearProps(order); order.visible = false; orderKey = ''; clearProps(jacket); jacket.visible = false; clearProps(stack); clearProps(crumples); stackN = -1; crumpleN = -1;
+      flag.visible = false;  clearProps(reports); reportN = 0; clearProps(order); order.visible = false; orderKey = ''; clearProps(jacket); jacket.visible = false; outKit.clear(); clearProps(crumples); crumpleN = -1;
       if (!worker) { drawPodSign('', null); this.setChairOut(false); return; }
       const h = worker.look?.seed ?? Math.random();
       personal = personalItem(PERSONAL_KINDS[Math.floor(h * 997) % PERSONAL_KINDS.length]);
@@ -2317,20 +2319,13 @@ function makePod(group, cx, cz, row, col, obs, glowTex = null, level = 0) {
       applyMode(jacket); applyMode(personal);
     },
     /** called a few times a second with the owner's real status */
-    setWorkState({ mode, accent, away, minutes, errors, project }) {
+    setWorkState({ mode, accent, away, errors, project }) {
       if (!this.owner) return;
       this.led = { mode, accent };
       flag.visible = mode === 'asking';
       if (project) drawPodSign(project, accent);
       jacket.visible = !!away;
       if (this.glowTarget > 0) this.glowTarget = away ? 0.12 : mode === 'idle' ? 0.3 : 0.55;  // screen locks while away
-      const n = Math.max(0, Math.min(10, Math.round(Math.log2(1 + minutes / 2) * 1.7)));
-      if (n !== stackN) {
-        stackN = n; clearProps(stack);
-        stack.position.set(0.58, 0.757, -0.26);
-        for (let i = 0; i < n; i++) { const sh = box(0.2, 0.012, 0.145, i % 4 === 3 ? folderMats[i % 3] : paperMat, { y: 0.006 + i * 0.013, cast: i === n - 1 }); sh.rotation.y = Math.sin(i * 2.7) * 0.12; stack.add(sh); }
-        freezeStatic(stack); applyMode(stack); // a stack is one piece until it changes
-      }
       const e = Math.max(0, Math.min(6, errors));
       if (e !== crumpleN) {
         crumpleN = e; clearProps(crumples);

@@ -51,7 +51,7 @@ const FLOOR_KEEP_MS = 10 * 60 * 1000;     // an empty upper floor stays this lon
 const EVENT_KEEP_MS = 60 * 60 * 1000;
 const STALE_EVENT_MS = 60000;
 const DEBOUNCE_MS = 8000, READY_FRESH_MS = 20000, FINISHED_MIN_MS = 2 * 60 * 1000;
-const HANDBACK_S = 5.2, BRIEF_S = 3.4, COLLECT_S = 1.7, BREW_S = 3.2, STRETCH_S = 2.4, REVIEW_S = 2.8, HANDOVER_S = 2.4, STAMP_S = 2.6, BYE_S = 1.5, EXIT_S = 1.3;
+const HANDBACK_S = 5.2, BRIEF_S = 3.4, COLLECT_S = 1.7, BREW_S = 3.2, STRETCH_S = 2.4, REVIEW_S = 2.8, HANDOVER_S = 2.4, STAMP_S = 2.6, BYE_S = 1.5, EXIT_S = 1.3, PACK_S = 1.6;
 const SESSION_MS = 7000, ROOM_WAIT_MS = 60000, ROOM_COOL_MS = 60000, BOARD_KEEP_MS = 90000;
 const CONF_RANK = { declared: 3, structural: 3, artifact: 2, inferred: 1 };
 const weakLink = ev => (CONF_RANK[ev?.confidence] ?? 3) < 3;
@@ -313,6 +313,12 @@ export class Director {
     r.leaving = true; this.leaveCoffee(r); r.spot = null;
     const lead = this.lead(r), pod = lead?.desk;
     const waved = this.isHelper(r) && pod && !r.wavedBye && r.seatedOnce;
+    // what they made is on their desk (sheets, binders: outputprops.js): back to it to pack it up, then out with it
+    const o = r.agent?.output;
+    if (!waved && r.desk && r.seatedOnce && o && (o.files > 0 || o.commits > 0) && r.step?.k !== 'pack') {
+      this.releaseSeat(r); r.qa = null; r.reviewing = null; r.meetSeat = null; r.kickoff = null; r.queue = [];
+      this.setStep(r, { k: 'pack', f: r.desk.f, d: r.desk.d }); return;
+    }
     this.releaseDesk(r); this.releaseSeat(r); r.qa = null; r.reviewing = null; r.meetSeat = null; r.kickoff = null; this.releaseSlot(r); r.queue = [];
     if (waved) { r.wavedBye = true; this.setStep(r, { k: 'bye', f: pod.f, d: pod.d }); return; }
     this.setStep(r, { k: 'exit', f: 0 });
@@ -451,7 +457,7 @@ export class Director {
   // ---- one worker, one tick ---------------------------------------------------------------------------------------------
   tick(r) {
     const now = this.now, k = r.step.k, here = this.arrived(r), t = this.t(r);
-    if (r.leaving && !['bye', 'exit', 'out'].includes(k)) { this.startExit(r); return; }
+    if (r.leaving && !['bye', 'exit', 'out', 'pack'].includes(k)) { this.startExit(r); return; }
     if (['desk', 'slot', 'break', 'qa', 'review'].includes(k) && here && r.queue.length && !r.leaving && now >= r.stampEnd && this.startAction(r)) return;
     switch (k) {
       case 'in': if (t > WIPE_S) this.decide(r); break;
@@ -545,6 +551,7 @@ export class Director {
         if ((!this.idle(r) || this.onJob(r)) && (r.step.a !== 'wc' || t > 2)) { this.backToDesk(r); break; }
         if (t > (r.step.dur || 7)) { r.spot = null; this.backToBreak(r); }
         break;
+      case 'pack': if (t > PACK_S) { this.releaseDesk(r); this.setStep(r, { k: 'exit', f: 0 }); } break;
       case 'bye': if (t > BYE_S) this.setStep(r, { k: 'exit', f: 0 }); break;
       case 'exit': if (t > EXIT_S) this.setStep(r, { k: 'out', f: 0 }, { walk: OUT_S }); break;
       case 'out': if (here) this.recs.delete(r.id); break;

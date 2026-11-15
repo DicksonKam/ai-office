@@ -8,6 +8,7 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { CONFIG } from '../config.js';
+import { ledgerOf, claudeLine } from '../output.js';
 import { readTail, parseJsonl, snippet, basename, isPidAlive, projectOf, SeenMap, every, readdirCached, statCached } from '../tail.js';
 
 const tailCache = new SeenMap();      // transcript path -> { mtimeMs, size, info }
@@ -445,7 +446,7 @@ async function collectSubagents(parentId, transcriptPath, parentInfo, now, out) 
       status: working ? 'working' : 'idle', statusAt, lastActivityAt: info.activeAt,
       finished: !!doneAt, finishedAt: doneAt || null,
       thought: info.thought, parentId, waiting: false, events,
-      pid: null, touches: info.touches, jobObs: info.jobs, // a subagent runs inside the lead's process
+      output: await ledgerOf(p, claudeLine, now), pid: null, touches: info.touches, jobObs: info.jobs, // a subagent runs inside the lead's process
     });
   }
   return busy;
@@ -501,7 +502,7 @@ export async function collectClaude(now) {
       statusAt: idleFrom ?? (turn && !busy ? (info.turnEndAt || info.activeAt) : transcriptActive ? info.activeAt : statusAt),
       lastActivityAt: idleFrom ?? Math.max(statusAt, info?.activeAt || 0),
       thought: info?.thought || null, parentId: null, waiting: turn ? turn.waiting : !!(busy && info?.waiting), asking, events: [],
-      pid: alive && Number.isInteger(s.pid) && s.pid > 0 ? s.pid : null, touches: info?.touches || [], jobObs: info?.jobs, startCalls: info?.sessionStarts, hostId: s.hostSessionId || null, // the registry names the process
+      output: transcript ? await ledgerOf(transcript, claudeLine, now, { sessionId: s.sessionId }) : null, pid: alive && Number.isInteger(s.pid) && s.pid > 0 ? s.pid : null, touches: info?.touches || [], jobObs: info?.jobs, startCalls: info?.sessionStarts, hostId: s.hostSessionId || null, // the registry names the process
     });
     agents.push(...helpers);
   }
@@ -543,7 +544,7 @@ export async function collectClaude(now) {
         model: info.model, branch: info.gitBranch, startedAt: null, alive: true,
         status: working ? 'working' : 'idle', statusAt: turn && !working ? (info.turnEndAt || info.activeAt) : info.activeAt, lastActivityAt: info.activeAt,
         thought: info.thought, parentId: null, waiting: turn ? turn.waiting : !!(working && info.waiting), events: [],
-        pid: null, touches: info.touches, jobObs: info.jobs, startCalls: info.sessionStarts, // unregistered (headless / SDK): no pid on record and no start time to join one by
+        output: await ledgerOf(p, claudeLine, now, { sessionId }), pid: null, touches: info.touches, jobObs: info.jobs, startCalls: info.sessionStarts, // unregistered (headless / SDK): no pid on record and no start time to join one by
       });
       agents.push(...helpers);
     }

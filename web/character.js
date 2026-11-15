@@ -597,6 +597,10 @@ export class Chibi {
       g.add(box(0.21, 0.29, 0.006, toon(0xfbf8f2), { outline: 0.006 }));
       for (let i = 0; i < 5; i++) g.add(box(0.15 - (i % 2) * 0.04, 0.012, 0.004, toon(0x9b8fb0), { x: -0.01 - (i % 2) * 0.02, y: 0.09 - i * 0.04, z: 0.005, cast: false }));
       g.position.set(0, 0.55, 0.26); g.rotation.x = -0.5;
+    } else if (name === 'papers') { // what they made today, taken home: a sheaf of printouts with a binder against it
+      for (let i = 0; i < 4; i++) g.add(box(0.21, 0.28, 0.006, toon(0xfbf8f2), { x: (i % 2) * 0.008 - 0.004, y: i * 0.004, z: i * 0.007, outline: 0.005 }));
+      g.add(box(0.24, 0.3, 0.035, toon(PAL_BOOK[Math.floor(this.look.seed * 3) % 3]), { y: 0.005, z: -0.022, outline: 0.006 }));
+      g.position.set(0.04, 0.5, 0.25); g.rotation.set(-0.35, 0.15, 0.1);
     } else if (name === 'clipboard') {
       g.add(box(0.24, 0.3, 0.015, toon(0xd9b48a), { outline: 0.012 }));
       g.add(box(0.2, 0.26, 0.006, toon(0xfffdf7), { z: 0.011, cast: false }));
@@ -803,8 +807,12 @@ export class Chibi {
         add.rigY = Math.abs(Math.sin(t * 5)) * 0.02; tH.x = -0.12; tH.z = Math.sin(t * 2.5) * 0.06; browRaise = 1; this.talking = Math.sin(t * 3) > 0.3;
         break;
       }
-      case 'reach': { // an arm out to the side, head with it: working the lid of the laptop beside the desk
-        tTO.x = 0.08; tAR.set(-1.35, 0, 0.82); tAL.set(sitting ? -1.05 : 0.05, 0, 0.28); tH.x = 0.2; tH.y = -0.42;
+      case 'reach': { // an arm out to the side, head with it: working the lid of the laptop beside the desk (their right)
+        tTO.x = 0.08; tAL.set(-1.35, 0, -0.82); tAR.set(sitting ? -1.05 : 0.05, 0, -0.28); tH.x = 0.2; tH.y = -0.42;
+        break;
+      }
+      case 'reachL': { // the same to their left: a sheet into the out-tray, a binder onto the row
+        tTO.x = 0.08; tAR.set(-1.35, 0, 0.82); tAL.set(sitting ? -1.05 : 0.05, 0, 0.28); tH.x = 0.2; tH.y = 0.42;
         break;
       }
       case 'mouse': { // a pause between keystrokes: one hand on the mouse, eyes on the screen

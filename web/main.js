@@ -371,7 +371,7 @@ const cardHtml = new Map(); // element id -> the markup last written into it
 function setHtml(id, html) { if (cardHtml.get(id) === html) return; cardHtml.set(id, html); $(id).innerHTML = html; }
 function setText(id, text) { const el = $(id); if (el.textContent !== text) el.textContent = text; }
 const pad2 = n => String(n).padStart(2, '0');
-const hhmm = t => { const d = new Date(t); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const hhmm = t => { const d = new Date(t + previewShift()); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }; // a preview hour moves it with the clock
 function durText(ms) {
   const m = Math.max(0, Math.round(ms / 60000)); if (m < 1) return '<1 min'; if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60), r = m % 60; return r ? `${h} h ${r} min` : `${h} h`;
@@ -382,7 +382,7 @@ function ago(t, now) {
   const h = Math.floor(m / 60); return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
 }
 /** a time today as 09:12, on another day as "Mon 22:10" */
-function whenText(t) { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? hhmm(t) : `${d.toLocaleDateString([], { weekday: 'short' })} ${hhmm(t)}`; }
+function whenText(t) { const sh = previewShift(), d = new Date(t + sh); return d.toDateString() === new Date(Date.now() + sh).toDateString() ? hhmm(t) : `${d.toLocaleDateString([], { weekday: 'short' })} ${hhmm(t)}`; }
 /** a project path for the card: the home folder as ~, a long one as …/last/two (the full path stays in the tooltip) */
 function shortPath(p) {
   const s = String(p || '').replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~');
@@ -437,6 +437,16 @@ overlay.chat = {
     finally { btn.disabled = false; }
   },
 };
+/** what the agent has really made this session, in words for the card (counts only), or '' when nothing yet */
+function madeWords(o) {
+  if (!o) return '';
+  const t = o.tests || {}, parts = [];
+  if (o.files) parts.push(`${o.files} file${o.files === 1 ? '' : 's'} written`);
+  if (t.pass || t.fail) parts.push(`tests ${t.pass || 0} passed${t.fail ? `, ${t.fail} failed` : ''}`);
+  if (o.commits) parts.push(`${o.commits} commit${o.commits === 1 ? '' : 's'}`);
+  if (t.running) parts.push('a test running now');
+  return parts.join(' · ');
+}
 function refreshCard() {
   const w = selected; if (!w || w.done) { closeCard(); return; }
   const a = w.agent, now = stage.wall();
@@ -458,6 +468,7 @@ function refreshCard() {
   const since = inOfficeSince(w, day, now);
   setText('cardSince', since.before ? `since before ${whenText(since.t)} (page opened)` : `since ${whenText(since.t)} · ${durText(now - since.t)}`);
   renderTeam(w);
+  { const made = madeWords(a.output); $('cardMade').hidden = $('cardMadeDt').hidden = !made; if (made) setText('cardMade', made); }
   setText('cardThought', a.thought ? a.thought.text : '—');
   renderDay(w, day);
   renderJobs(w, now);
@@ -848,6 +859,7 @@ away = startAway({ player, source: filmSource, enabled: !isDemo }); // back afte
 $('filmToggle').addEventListener('click', () => { if (player.active) player.leave(); else player.open('day=today'); });
 let prevStatus = new Map(); // id -> status from the previous snapshot (for the log diff)
 let prevAsking = new Map(); // id -> what the agent is asking the user, if anything
+const prevMade = new Map(); // id -> { commits, fail } last logged, so a commit or a failed test run is logged once
 let reprimeLog = false; // set on a reconnect: the first snapshot after it is a new baseline for the log diff
 function onSnapshot(snap) {
   sitePlace = snap.config?.site || sitePlace;
@@ -910,8 +922,19 @@ function logLine(kind, d) {
     case 'handoff': return ['⇄', `${b(d.name)} handed over to ${b(d.to)}${d.text ? ` · ${esc(d.text)}` : ''}`, 'event'];
     case 'approval': return ['👍', `${b(d.name)} approved ${b(d.to)}${d.text ? ` · ${esc(d.text)}` : ''}`, 'event'];
     case 'launch': return ['▶', `${b(d.to)} was started by ${b(d.name)}`, 'event'];
+    case 'committed': return ['📁', `${b(d.name)} committed${d.n > 1 ? ` ${d.n} times` : ''}`];
+    case 'testsFailed': return ['🔴', `${b(d.name)}'s tests failed`, 'event'];
     default: return null;
   }
+}
+/** a commit, or a failed test run, since the last time this agent's output was seen: one log line each (counts only) */
+function logMade(at, id, o, name, render = true) {
+  if (!o) return;
+  const now = { commits: o.commits || 0, fail: o.tests?.fail || 0 }, was = prevMade.get(id);
+  prevMade.set(id, now);
+  if (!was) return; // first sight: what came before is not news
+  if (now.commits > was.commits) logAs(at, 'committed', { name, n: now.commits - was.commits }, render);
+  if (now.fail > was.fail) logAs(at, 'testsFailed', { name }, render);
 }
 /** a link end the office could not resolve shows its label instead of an id */
 function endName(ev, side, nm) { return ev.stub?.side === side ? ev.stub.label : nm(ev[side]); }
@@ -927,6 +950,7 @@ function logFromSnapshot(snap, before, diff = true) {
     for (const a of snap.agents) {
       const w = mgr.workers.get(a.id); const name = w?.name || a.nickname || '?';
       if (!before.has(a.id)) {
+        prevMade.set(a.id, { commits: 0, fail: 0 }); // walked in just now: everything they make is news
         logAs(now, 'arrived', { name, role: a.role, lead: a.parentId ? nameOf(a.parentId, snap) : null, task: a.task, project: a.project });
       } else {
         const prev = before.get(a.id);
@@ -937,8 +961,10 @@ function logFromSnapshot(snap, before, diff = true) {
       }
     }
     for (const [id] of before) if (!ids.has(id)) logAs(now, 'left', { name: nameOf(id, snap) });
+    for (const a of snap.agents) logMade(now, a.id, a.output, mgr.workers.get(a.id)?.name || a.nickname || '?');
   } else if (!logPrimed) {
     logPrimed = true;
+    for (const a of snap.agents) if (a.output && !prevMade.has(a.id)) prevMade.set(a.id, { commits: a.output.commits || 0, fail: a.output.tests?.fail || 0 }); // what was made before the page opened
     if (snap.agents.length && !journalRestored) addLog(now, '🏢', `office opened with <b>${snap.agents.length}</b> already in`);
   }
   for (const ev of snap.events || []) {
@@ -988,7 +1014,7 @@ function replayJournal(entries, snap) {
   for (const e of entries.slice().sort((a, b) => Number(a.t) - Number(b.t))) {
     const t = Number(e.t), id = e.id, name = nm(id), st = status.get(id);
     switch (e.kind) {
-      case 'arrived': status.set(id, 'arrived'); logAs(t, 'arrived', { name, role: e.role, lead: e.parentId ? nm(e.parentId) : null, task: e.task, project: e.project }, false); break;
+      case 'arrived': status.set(id, 'arrived'); if (!e.carried) prevMade.set(id, { commits: 0, fail: 0 }); logAs(t, 'arrived', { name, role: e.role, lead: e.parentId ? nm(e.parentId) : null, task: e.task, project: e.project }, false); break;
       case 'left': status.delete(id); logAs(t, 'left', { name }, false); break;
       case 'working': if (st === 'idle' || st === undefined) logAs(t, 'working', { name }, false); status.set(id, 'working'); break;
       case 'idle': { // a top-level session after a real piece of work: finished · your turn (the journal's own rule)
@@ -1005,6 +1031,7 @@ function replayJournal(entries, snap) {
         const k = `${e.kind}|${from}|${to ?? ''}`; if (!journalSigs.has(k)) journalSigs.set(k, []); journalSigs.get(k).push(at);
         break;
       }
+      case 'output': { const o = e.output || {}; logMade(t, id, { commits: o.commits, tests: { fail: o.fail } }, name, false); break; }
       default: break; // asking-end, role-change: no line in the live log either
     }
   }
@@ -1236,7 +1263,7 @@ function frame(now) {
   renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
-window.__office = { mgr, scene, camera, renderer, THREE, player, stage,
+window.__office = { mgr, scene, camera, renderer, THREE, player, stage, showCard,
   /** Done-check used by MILESTONE.md: every floor / desk group untransformed, plus frame rate and counts. */
   check() {
     const bad = [];
