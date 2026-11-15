@@ -1,5 +1,11 @@
 // Gemini CLI collector.
-//  - ~/.gemini/tmp/<project>/chats/session-<time>-<id>.json   current CLI: the whole conversation, rewritten as it goes:
+//  - ~/.gemini/tmp/<project>/chats/session-<time>-<id>.jsonl   current CLI (0.2x and later): appended as it goes. Line 1
+//        is the metadata ({ sessionId, projectHash, startTime, lastUpdated, kind: 'main' | 'subagent' }); later changes to
+//        it come as { $set: {...} }; each message is a line of its own, and a message written again (a tool call moving
+//        from awaiting_approval to success) is the whole message again with the same id: the last one wins. Tool results
+//        come as { $patch: { updates: [{ id, content?, toolCalls?: [{ id, result }] }], removeIds?, orderIds? } }, and
+//        a rewind as { $rewindTo: <message id> }. A helper's session sits in chats/<lead's sessionId>/<its id>.jsonl.
+//  - ~/.gemini/tmp/<project>/chats/session-<time>-<id>.json   earlier builds: the whole conversation, rewritten as it goes:
 //        { sessionId, projectHash, startTime, lastUpdated, summary?, messages: [{ id, timestamp, type: 'user' | 'gemini' |
 //          'info' | 'error' | 'warning', content, model?, thoughts?: [{ subject, description, timestamp }],
 //          toolCalls?: [{ id, name, displayName?, args, status: 'validating' | 'scheduled' | 'awaiting_approval' |
@@ -16,8 +22,8 @@ import { CONFIG } from '../config.js';
 import { readTail, readHead, parseJsonl, snippet, basename, SeenMap, every, readdirCached, statCached } from '../tail.js';
 
 const HOME = os.homedir();
-const GEMINI_DIR = path.join(HOME, '.gemini');
-const TMP_DIR = path.join(GEMINI_DIR, 'tmp');
+const geminiDir = () => CONFIG.gemini?.home || path.join(HOME, '.gemini');
+const tmpDir = () => path.join(geminiDir(), 'tmp');
 
 const ASKING_WINDOW_MS = 6 * 60 * 60 * 1000; // sessions touched this recently are looked at
 const PHANTOM_ASK_MS = 30 * 60 * 1000;       // awaiting_approval in a file untouched this long is left over from a crash
@@ -131,6 +137,43 @@ function extractConversation(messages) {
   return info;
 }
 
+/** The lines of an appended (.jsonl) session folded into what the CLI itself would load: the metadata with every
+ *  $set applied, and the messages in order, the last copy of each id winning, with patches, removals and rewinds. */
+export function foldRecords(lines) {
+  const meta = {}, msgs = new Map();
+  let anon = 0;
+  for (const l of lines) {
+    if (!l || typeof l !== 'object' || Array.isArray(l)) continue;
+    if (l.$set && typeof l.$set === 'object') { Object.assign(meta, l.$set); continue; }
+    if (typeof l.$rewindTo === 'string') { // back to just before that message: it and all after it are gone
+      let drop = false; for (const k of [...msgs.keys()]) { if (k === l.$rewindTo) drop = true; if (drop) msgs.delete(k); }
+      continue;
+    }
+    if (l.$patch && typeof l.$patch === 'object') {
+      const p = l.$patch, ups = Array.isArray(p.updates) ? p.updates : p.id ? [p] : [];
+      for (const u of ups) {
+        const m = u && msgs.get(u.id); if (!m) continue;
+        const next = { ...m };
+        if ('content' in u) next.content = u.content;
+        if (Array.isArray(u.toolCalls) && Array.isArray(m.toolCalls)) next.toolCalls = m.toolCalls.map(c => { const v = u.toolCalls.find(x => x?.id === c?.id); return v ? { ...c, ...v } : c; });
+        msgs.set(u.id, next);
+      }
+      for (const id of Array.isArray(p.removeIds) ? p.removeIds : []) msgs.delete(id);
+      if (Array.isArray(p.orderIds) && p.orderIds.length) {
+        const ordered = new Map(); for (const id of p.orderIds) if (msgs.has(id)) ordered.set(id, msgs.get(id));
+        for (const [k, v] of msgs) if (!ordered.has(k)) ordered.set(k, v);
+        msgs.clear(); for (const [k, v] of ordered) msgs.set(k, v);
+      }
+      continue;
+    }
+    if (l.type === 'message' && l.message) { msgs.set(l.message.id ?? `#${anon++}`, l.message); continue; } // an old wrapper
+    if (typeof l.type === 'string' && ['user', 'gemini', 'error', 'info', 'warning'].includes(l.type)) { msgs.set(l.id ?? `#${anon++}`, l); continue; }
+    if (Array.isArray(l.messages)) { for (const m of l.messages) if (m) msgs.set(m.id ?? `#${anon++}`, m); }
+    if (l.sessionId) for (const [k, v] of Object.entries(l)) if (k !== 'messages' && !(k in meta)) meta[k] = v;
+  }
+  return { meta, messages: [...msgs.values()] };
+}
+
 /** Session id from the top of a session file (the metadata record / object comes first). */
 async function headSessionId(file) {
   try {
@@ -160,15 +203,8 @@ async function sessionInfo(file, st, now) {
   try {
     if (file.endsWith('.jsonl')) {
       const { text, size } = await readTail(file, CONFIG.tailBytes);
-      const lines = parseJsonl(text);
-      const meta = lines.find(l => l.sessionId && !l.type) || {};
-      const msgs = [];
-      for (const l of lines) {
-        if (l.type === 'message' && l.message) msgs.push(l.message);
-        else if (l.type && l.timestamp && ['user', 'gemini', 'error', 'info', 'warning'].includes(l.type)) msgs.push(l);
-        else if (Array.isArray(l.messages)) msgs.push(...l.messages);
-      }
-      record = { ...meta, sessionId: meta.sessionId || lines.find(l => l.sessionId)?.sessionId, messages: msgs };
+      const { meta, messages: msgs } = foldRecords(parseJsonl(text));
+      record = { ...meta, messages: msgs };
       // past the tail the metadata line is gone: take the id from the top of the file
       if (size > CONFIG.tailBytes && !meta.sessionId && !sessionIds.has(file)) {
         const h = await headSessionId(file);
@@ -191,6 +227,7 @@ async function sessionInfo(file, st, now) {
     updatedAt: tsOf(record?.lastUpdated),
     summary: typeof record?.summary === 'string' ? snippet(record.summary, 60) : null,
     projectHash: record?.projectHash || null,
+    kind: record?.kind || null,
     ...extractConversation(messages),
   };
   sessionCache.set(file, { mtimeMs: st.mtimeMs, size: st.size, info }, now);
@@ -221,7 +258,7 @@ async function loadRegistry(now) {
   if (now - registry.at < 60000) return registry.map;
   const map = new Map();
   try {
-    const j = JSON.parse(await readFile(path.join(GEMINI_DIR, 'projects.json'), 'utf8'));
+    const j = JSON.parse(await readFile(path.join(geminiDir(), 'projects.json'), 'utf8'));
     const walk = (o, depth) => {
       if (!o || typeof o !== 'object' || depth > 3) return;
       for (const [k, v] of Object.entries(o)) {
@@ -260,7 +297,7 @@ async function projectRoot(dirName, now) {
   const hit = rootCache.get(dirName);
   if (hit && (hit.root || now - hit.at < 10 * 60 * 1000)) { rootCache.touch(dirName, now); return hit.root; }
   let root = null;
-  try { root = (await readFile(path.join(TMP_DIR, dirName, '.project_root'), 'utf8')).trim() || null; } catch { /* none */ }
+  try { root = (await readFile(path.join(tmpDir(), dirName, '.project_root'), 'utf8')).trim() || null; } catch { /* none */ }
   if (!root) root = (await loadRegistry(now)).get(dirName) || null;
   if (!root && /^[0-9a-f]{64}$/.test(dirName)) root = await guessRoot(dirName);
   rootCache.set(dirName, { root, at: now }, now);
@@ -314,18 +351,27 @@ export async function collectGemini(now) {
   const agents = [];
   pruneCaches(now);
   let dirs = [];
-  try { dirs = await readdirCached(TMP_DIR, now, { withFileTypes: true }); } catch { return agents; }
+  try { dirs = await readdirCached(tmpDir(), now, { withFileTypes: true }); } catch { return agents; }
   for (const d of dirs) {
     if (!d.isDirectory() || d.name.startsWith('.')) continue;
-    const pdir = path.join(TMP_DIR, d.name);
+    const pdir = path.join(tmpDir(), d.name);
     const seen = new Set();
     let root; // resolved lazily: only projects with a live session pay for it
     const rootFor = async () => (root === undefined ? (root = await projectRoot(d.name, now)) : root);
 
-    let files = [];
-    try { files = (await readdirCached(path.join(pdir, 'chats'), now)).filter(f => /\.jsonl?$/.test(f)); } catch { /* no chats on this build */ }
-    for (const f of files) {
-      const file = path.join(pdir, 'chats', f);
+    // the lead's sessions, then each helper's in chats/<lead's sessionId>/
+    let entries = [];
+    try { entries = await readdirCached(path.join(pdir, 'chats'), now, { withFileTypes: true }); } catch { /* no chats on this build */ }
+    const files = [];
+    for (const e of entries) {
+      if (e.isFile() && /\.jsonl?$/.test(e.name)) files.push({ file: path.join(pdir, 'chats', e.name), lead: null });
+      else if (e.isDirectory() && !e.name.startsWith('.')) {
+        let sub = [];
+        try { sub = await readdirCached(path.join(pdir, 'chats', e.name), now); } catch { continue; }
+        for (const f of sub) if (/\.jsonl?$/.test(f)) files.push({ file: path.join(pdir, 'chats', e.name, f), lead: e.name });
+      }
+    }
+    for (const { file, lead } of files) {
       const st = await statCached(file, now, { staleMs: ASKING_WINDOW_MS }); // old sessions: re-checked every 15 s
       if (!st || now - st.mtimeMs > ASKING_WINDOW_MS) continue;
       const info = await sessionInfo(file, st, now);
@@ -335,12 +381,14 @@ export async function collectGemini(now) {
       if (seen.has(info.sessionId)) continue;
       seen.add(info.sessionId);
       const cwd = await rootFor();
+      const helper = !!lead || info.kind === 'subagent';
+      const what = info.summary || info.firstUser;
       agents.push({
-        id: `gemini:${info.sessionId}`, vendor: 'gemini', kind: 'cli', host: 'Gemini CLI', nickname: null,
-        task: info.summary || info.firstUser || (cwd ? basename(cwd) : 'Gemini session'),
+        id: `gemini:${info.sessionId}`, vendor: 'gemini', kind: helper ? 'subagent' : 'cli', host: 'Gemini CLI', nickname: null,
+        task: helper ? (what ? `Helper: ${snippet(what, 50)}` : 'Helper') : what || (cwd ? basename(cwd) : 'Gemini session'),
         cwd, project: cwd ? basename(cwd) : (/^[0-9a-f]{64}$/.test(d.name) ? 'Gemini' : d.name), model: info.model, branch: null,
         startedAt: info.startedAt, alive: true, status: s.status, statusAt: s.statusAt, lastActivityAt: s.activeAt,
-        thought: info.thought, parentId: null, waiting: false, asking: s.asking, events: [],
+        thought: info.thought, parentId: lead ? `gemini:${lead}` : null, waiting: false, asking: s.asking, events: [],
         pid: null, touches: info.touches || [], // no pid on record; cwd + startedAt let the process reader try a weak join
       });
     }

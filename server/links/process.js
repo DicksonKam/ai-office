@@ -44,7 +44,7 @@ const VENDOR_CLI = {
   claude: cmd => /^claude$/.test(labelOf(cmd)),
   codex: cmd => /^codex$/.test(labelOf(cmd)) && !/\bcodex\s+sandbox\b/.test(cmd),
   cursor: cmd => /^cursor-agent$/.test(labelOf(cmd)),
-  gemini: cmd => /^gemini(\.js)?$/.test(labelOf(cmd)) || /gemini-cli|\/bin\/gemini(\s|$)/.test(cmd),
+  gemini: cmd => /^(gemini(\.js)?|agy)$/.test(labelOf(cmd)) || /gemini-cli|\/bin\/(gemini|agy)(\s|$)/.test(cmd), // Gemini CLI, Antigravity CLI
 };
 
 // a vendor's host: the program its chats run inside (the CLI, the Desktop app's `codex app-server`, Cursor's app). An

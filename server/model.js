@@ -12,6 +12,7 @@ import { collectClaude } from './collectors/claude.js';
 import { collectCodex, codexSchedules } from './collectors/codex.js';
 import { collectCursor, cursorJobs } from './collectors/cursor.js';
 import { collectGemini } from './collectors/gemini.js';
+import { collectAntigravity } from './collectors/antigravity.js';
 import { logError, logRecovered, FORGET_AFTER_MS } from './tail.js';
 import { createLinkLoader } from './links/index.js';
 import { LinkResolver, EVENT_TO_LINK } from './links/resolve.js';
@@ -36,7 +37,7 @@ const askSince = new Map();    // id -> ms its open ask started (an ask to a del
 const stillSince = new Map();  // id -> ms it stopped working (a delegator that stopped no longer answers asks for long)
 const recentEvents = new Map(); // event id -> event (recent interaction events, deduped)
 export const EVENT_TTL = 3 * 60 * 1000;
-const DEFAULT_COLLECTORS = [['[claude]', collectClaude], ['[codex]', collectCodex], ['[cursor]', collectCursor], ['[gemini]', collectGemini]];
+const DEFAULT_COLLECTORS = [['[claude]', collectClaude], ['[codex]', collectCodex], ['[cursor]', collectCursor], ['[gemini]', collectGemini], ['[antigravity]', collectAntigravity]];
 let linkLoader = null;               // created on first use (readers open nothing until they run)
 const linkResolver = new LinkResolver();
 export const jobBook = new JobBook();

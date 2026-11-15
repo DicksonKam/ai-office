@@ -32,6 +32,10 @@ export const CONFIG = {
     sessionsDir: path.join(HOME, '.claude', 'sessions'),
     projectsDir: path.join(HOME, '.claude', 'projects'),
   },
+  gemini: {
+    home: path.join(HOME, '.gemini'),                          // Gemini CLI: tmp/<project>/chats/session-*.jsonl
+    antigravity: path.join(HOME, '.gemini', 'antigravity-cli'), // Antigravity CLI (agy): conversation_summaries.db + conversations/<id>.db
+  },
   codex: {
     home: path.join(HOME, '.codex'),
     stateDb: path.join(HOME, '.codex', 'state_5.sqlite'),

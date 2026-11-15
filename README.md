@@ -65,8 +65,10 @@ memory only). Click a name tag for details; the **Teams** pill
 toggles the roster panel.
 
 **Which agents:** Claude Code (desktop and CLI, with Agent-tool helpers), Codex (desktop and CLI, with spawned agents and
-Guardian reviewers), Cursor (agent chats from its local state database, with explore subagents) and Gemini CLI (local
-logs / chat recordings). Copilot leaves no local session trace on a Mac, so it is not shown. Any other tool can report jobs and links by writing the open formats below.
+Guardian reviewers), Cursor (agent chats from its local state database, with explore subagents) and Gemini, on a Gemini
+plan: the Gemini CLI (its chat recordings, appended as it goes, with helpers under their lead; the early prompt logs
+too) and the Antigravity CLI `agy` (its conversation databases, read from a private copy so nothing is ever written
+beside them; waiting for your OK, at work, helpers under their lead). Copilot leaves no local session trace on a Mac, so it is not shown. Any other tool can report jobs and links by writing the open formats below.
 
 **As an app:** Chrome "Install as app" or Safari "Add to Dock" on <http://localhost:4477> gives the office its own
 window and icon; the dock badge and the tab title show how many agents are waiting on you. The **Alerts** pill turns
@@ -110,7 +112,7 @@ explains the tags and bubbles. When an agent is waiting on you, the header shows
 
 | Behaviour | Data behind it |
 | --- | --- |
-| Someone walks in / leaves | a Claude Code session registered in `~/.claude/sessions`, a transcript being written, a Codex thread updated recently, a Cursor agent chat in its state database, or Gemini CLI logs / chat recordings |
+| Someone walks in / leaves | a Claude Code session registered in `~/.claude/sessions`, a transcript being written, a Codex thread updated recently, a Cursor agent chat in its state database, a Gemini CLI chat recording, or an Antigravity CLI conversation |
 | Typing / thinking / talking at the desk | last entry in the transcript or rollout: tool call, thinking block / reasoning summary, assistant text |
 | Thought bubble text | that same entry (tool described in words, text snippet, reasoning summary) |
 | Lead role | the agent has (or had) helpers: Claude `Agent` tool subagents, Codex `spawn_agent` threads |
@@ -335,6 +337,7 @@ server/            Node: collectors → snapshot (agents, teams, events) → Web
   collectors/codex.js    Codex SQLite threads + rollouts (messages, reports, verdicts)
   collectors/cursor.js   Cursor agent chats (read-only state database + agent transcripts)
   collectors/gemini.js   Gemini CLI logs and chat recordings
+  collectors/antigravity.js  Antigravity CLI (agy) conversations, read from a copy
   journal.js             day journal (data/journal), /api/today, /api/journal, /api/film
   uptime.js              when the office was running (data/uptime.json): a film hatches the rest
   links/                 link readers: declared (the open format in LINKS.md, from ~/.ai-office/links), process ancestry; the resolver
