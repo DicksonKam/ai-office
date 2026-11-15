@@ -121,15 +121,18 @@ function toFrustum(b) {
     const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2, above = h * up / free, below = h * tl / free, beside = w * side / freeW;
     return { left: cx - w / 2, right: cx + w / 2 + beside, top: cy + h / 2 + above, bottom: cy - h / 2 - below };
   };
-  // the Teams panel sits in the top right while open on a wide screen: centred when the office clears it, otherwise moved
-  // left and/or down only as far as it takes (the panel is often short, and an isometric office leaves that corner empty)
-  const rp = document.getElementById('roster'), rr = rp?.classList.contains('on') && W / H >= 0.8 ? rp.getBoundingClientRect() : null;
-  if (!rr || !b.hull || rr.width < 1) return frame(0);
-  const box = [rr.left - 12, rr.top - 12, rr.right + 12, rr.bottom + 12];
-  const hits = f => hullHitsRect(b.hull.map(([x, y]) => [(x - f.left) / (f.right - f.left) * W, (f.top - y) / (f.top - f.bottom) * H]), box);
+  // the panels that stay open on the right of a wide screen (Teams at the top, the Office log at the bottom): centred when
+  // the office clears them, otherwise moved left and/or down only as far as it takes (the panels are often short, and an
+  // isometric office leaves those corners nearly empty). The Key is a pop-up you close again: it never moves the frame.
+  const rects = W / H < 0.8 ? [] : ['roster', 'log'].map(id => document.getElementById(id))
+    .filter(el => el?.classList.contains('on')).map(el => el.getBoundingClientRect()).filter(r => r.width > 1 && r.height > 1);
+  if (!rects.length || !b.hull) return frame(0);
+  const boxes = rects.map(r => [r.left - 12, r.top - 12, r.right + 12, r.bottom + 12]);
+  const hits = f => { const poly = b.hull.map(([x, y]) => [(x - f.left) / (f.right - f.left) * W, (f.top - y) / (f.top - f.bottom) * H]); return boxes.some(bx => hullHitsRect(poly, bx)); };
   if (!hits(frame(0))) return frame(0);
   // a little of both is often best: for each way down, the least way aside; keep the biggest office (then the least moved)
-  const most = Math.min(W * 0.35, Math.max(0, W - rr.left + 8)), deepest = Math.max(0, Math.min(H * 0.45, rr.bottom - hud));
+  const most = Math.min(W * 0.35, Math.max(0, W - Math.min(...rects.map(r => r.left)) + 8));
+  const deepest = Math.max(0, Math.min(H * 0.45, Math.max(0, ...rects.filter(r => r.top < H / 2).map(r => r.bottom)) - hud));
   let best = null;
   for (let k = 0; k <= 8; k++) {
     const top = deepest * k / 8;
@@ -229,12 +232,28 @@ mgrRef = mgr; fitCamera(mgr.office); retarget(true); renderFloors(mgr);
 const _pic = new THREE.Vector3();
 mgr.inPicture = (x, y, z) => { if (!fullView) return false; _pic.set(x, y, z).applyMatrix4(camInv); return _pic.x > fullView.left && _pic.x < fullView.right && _pic.y > fullView.bottom && _pic.y < fullView.top; };
 
+/** Teams (top right) and the Office log (bottom right) open together: Teams stops short of the log rather than running
+ *  under it; when both are long they share the column, Teams a little more */
+function stackPanels() {
+  const ro = document.getElementById('roster'), lo = document.getElementById('log');
+  if (!ro || !lo) return;
+  ro.style.maxHeight = ''; lo.style.maxHeight = '';
+  if (!ro.classList.contains('on') || !lo.classList.contains('on')) return;
+  let r = ro.getBoundingClientRect(), l = lo.getBoundingClientRect();
+  if (l.left >= r.right || l.right <= r.left) return; // side by side, not one above the other
+  const GAP = 10, room = l.top - GAP - r.top;
+  if (r.bottom <= l.top - GAP) return;
+  if (room >= Math.min(220, r.height)) { ro.style.maxHeight = `${room}px`; return; }
+  const both = l.bottom - r.top - GAP, teams = Math.max(Math.min(r.height, both * 0.55), both - l.height);
+  ro.style.maxHeight = `${Math.max(80, teams)}px`; lo.style.maxHeight = `${Math.max(80, both - teams)}px`;
+}
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+  stackPanels();
   fitCamera(mgr.office);
 }
 window.addEventListener('resize', resize); resize();
-window.addEventListener('office:drawer', () => fitCamera(mgr.office)); // the Today drawer opened, closed or changed height
+window.addEventListener('office:drawer', () => { stackPanels(); fitCamera(mgr.office); }); // the Today drawer opened, closed or changed height
 
 // ---- time of day --------------------------------------------------------------
 function lerpColor(a, b, t) { return new THREE.Color(a).lerp(new THREE.Color(b), t); }
@@ -613,7 +632,7 @@ canvas.addEventListener('dblclick', () => setAutoZoom(!autoZoom));
 // ---- roster -----------------------------------------------------------------------
 const rosterEl = $('roster');
 // toggling the panel refits the camera: the frame makes room for it, or takes the space back
-$('rosterToggle').addEventListener('click', () => { rosterEl.classList.toggle('on'); setPressed($('rosterToggle'), rosterEl.classList.contains('on')); fitCamera(mgr.office, false); try { localStorage.setItem('ai-office-roster', rosterEl.classList.contains('on') ? '1' : '0'); } catch { /* ignore */ } });
+$('rosterToggle').addEventListener('click', () => { rosterEl.classList.toggle('on'); setPressed($('rosterToggle'), rosterEl.classList.contains('on')); stackPanels(); fitCamera(mgr.office, false); try { localStorage.setItem('ai-office-roster', rosterEl.classList.contains('on') ? '1' : '0'); } catch { /* ignore */ } });
 try { if (localStorage.getItem('ai-office-roster') !== '0' && window.innerWidth > 1000) { rosterEl.classList.add('on'); setPressed($('rosterToggle'), true); } } catch { /* ignore */ }
 // the panel grows as teams arrive: the frame eases aside as far as it now needs (or back once it shrinks)
 if (typeof ResizeObserver === 'function') {
@@ -851,7 +870,17 @@ const log = []; const loggedEvents = new Map(); // event id -> its time (forgott
 const EVENT_KEEP_MS = 60 * 60 * 1000;
 const logEl = $('log'), logBody = $('logBody');
 try { if (localStorage.getItem('ai-office-log') === '1') { logEl.classList.add('on'); setPressed($('logToggle'), true); } } catch { /* ignore */ }
-$('logToggle').addEventListener('click', () => { logEl.classList.toggle('on'); setPressed($('logToggle'), logEl.classList.contains('on')); try { localStorage.setItem('ai-office-log', logEl.classList.contains('on') ? '1' : '0'); } catch { /* ignore */ } });
+$('logToggle').addEventListener('click', () => { logEl.classList.toggle('on'); setPressed($('logToggle'), logEl.classList.contains('on')); stackPanels(); fitCamera(mgr.office, false); try { localStorage.setItem('ai-office-log', logEl.classList.contains('on') ? '1' : '0'); } catch { /* ignore */ } });
+// the log fills up, or moves up for the Today drawer or the Replay bar: Teams makes room, and the frame follows
+stackPanels(); fitCamera(mgr.office);
+if (typeof ResizeObserver === 'function') {
+  let was = null;
+  new ResizeObserver(() => {
+    const r = logEl.getBoundingClientRect(), now = logEl.classList.contains('on') ? `${Math.round(r.top / 8)}:${Math.round(r.height / 8)}` : '-';
+    if (now !== was) { was = now; stackPanels(); fitCamera(mgr.office, false); }
+  }).observe(logEl);
+  new MutationObserver(() => { stackPanels(); fitCamera(mgr.office, false); }).observe(document.body, { attributeFilter: ['class'] });
+}
 function nameOf(id, snap) { const w = mgr.workers.get(id); if (w) return w.name; const a = snap?.agents.find(a => a.id === id); return a?.nickname || 'someone'; }
 function addLog(at, icon, html, cls = '', render = true) {
   log.unshift({ at, icon, html, cls });
