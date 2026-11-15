@@ -45,10 +45,16 @@ test('the Gemini CLI: waiting for your OK, and a helper under its lead', async (
   const jsonl = rows => rows.map(r => JSON.stringify(r)).join('\n') + '\n';
   fs.writeFileSync(path.join(chats, 'session-2026-11-16T09-00-lead-1.jsonl'), jsonl([
     { sessionId: 'lead-1', projectHash: 'h', startTime: iso(-5 * MIN), lastUpdated: iso(-5 * MIN), kind: 'main' },
+    { id: 'c0', timestamp: iso(-5 * MIN), type: 'user', content: [{ text: '<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\n</session_context>' }] },
     { id: 'u1', timestamp: iso(-5 * MIN), type: 'user', content: [{ text: 'Fix the subtitle parser' }] },
     { id: 'g1', timestamp: iso(-20 * SEC), type: 'gemini', content: '', model: 'gemini-3-pro', toolCalls: [{ id: 'c1', name: 'run_shell_command', status: 'executing', args: { command: 'rm -r build' }, timestamp: iso(-20 * SEC) }] },
     { id: 'g1', timestamp: iso(-20 * SEC), type: 'gemini', content: '', model: 'gemini-3-pro', toolCalls: [{ id: 'c1', name: 'run_shell_command', status: 'awaiting_approval', args: { command: 'rm -r build', description: 'Clear the build folder' }, timestamp: iso(-10 * SEC) }] },
     { $set: { lastUpdated: iso(-10 * SEC) } },
+  ]));
+  fs.writeFileSync(path.join(chats, 'session-2026-11-16T09-04-fresh-2.jsonl'), jsonl([
+    { sessionId: 'fresh-2', projectHash: 'h', startTime: iso(-30 * SEC), lastUpdated: iso(-30 * SEC), kind: 'main' },
+    { id: 'c0', timestamp: iso(-30 * SEC), type: 'user', content: [{ text: '<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\n</session_context>' }] },
+    { $set: { lastUpdated: iso(-30 * SEC) } },
   ]));
   fs.writeFileSync(path.join(chats, 'lead-1', 'helper-9.jsonl'), jsonl([
     { sessionId: 'helper-9', projectHash: 'h', startTime: iso(-2 * MIN), lastUpdated: iso(-5 * SEC), kind: 'subagent' },
@@ -59,7 +65,7 @@ test('the Gemini CLI: waiting for your OK, and a helper under its lead', async (
   CONFIG.gemini.home = home;
   try {
     const agents = await collectGemini(now), by = id => agents.find(a => a.id === `gemini:${id}`);
-    assert.equal(agents.length, 2);
+    assert.equal(agents.length, 3);
     assert.equal(by('lead-1').asking, 'Needs your OK: Running: Clear the build folder');
     assert.equal(by('lead-1').status, 'working');
     assert.equal(by('lead-1').project, 'parser-app');
@@ -67,6 +73,8 @@ test('the Gemini CLI: waiting for your OK, and a helper under its lead', async (
     assert.equal(by('lead-1').model, 'gemini-3-pro');
     assert.equal(by('lead-1').task, 'Fix the subtitle parser');
     assert.equal(by('helper-9').parentId, 'gemini:lead-1');
+    assert.equal(by('fresh-2').status, 'idle', 'only the CLI\'s own opening message: opened, not used yet');
+    assert.equal(by('fresh-2').task, 'parser-app', 'the opening message is not a request');
     assert.equal(by('helper-9').kind, 'subagent');
     assert.equal(by('helper-9').task, 'Helper: Find where timestamps are parsed');
     assert.equal(by('helper-9').thought.text, 'Reading srt.js');

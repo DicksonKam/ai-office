@@ -1,4 +1,7 @@
-// Antigravity CLI (`agy`, Google's agent CLI on a Gemini plan) collector. Everything under ~/.gemini/antigravity-cli:
+// Antigravity collector: Google's agents on a Gemini plan. The same store in two places:
+//  - ~/.gemini/antigravity-cli   the Antigravity CLI (`agy`)
+//  - ~/.gemini/antigravity       the agents of the Gemini Mac app (it runs its own Antigravity, Gemini.app/Contents/Helpers/agy)
+// In each:
 //  - conversation_summaries.db   one row per conversation: title, preview (the first request), workspace_uris (JSON list of
 //        file:// URIs), status ('CASCADE_RUN_STATUS_IDLE' | _RUNNING | _BUSY | _CANCELING), parent_conversation_id (a
 //        helper's lead), agent_name, killed, last_modified_time ('2026-11-11 04:43:01.184119+00:00')
@@ -27,11 +30,15 @@ const BUSY_RUN = /RUNNING|BUSY|CANCELING/;
 let DatabaseSync = null;
 const copies = new SeenMap();   // source db -> { sig, file }
 const convCache = new SeenMap(); // conversation id -> { sig, info }
-let summaries = { sig: '', rows: new Map() };
+const summaries = new Map(); // home -> { sig, rows }
 const prune = every(60 * 1000, now => { copies.prune(now); convCache.prune(now); });
 const madeRoots = new Set();
 
-const home = () => CONFIG.gemini?.antigravity || path.join(os.homedir(), '.gemini', 'antigravity-cli');
+/** the stores to read: [{ dir, host, kind }] (a bare folder, as in tests, is a CLI) */
+function homes() {
+  const v = CONFIG.gemini?.antigravity ?? [{ dir: path.join(os.homedir(), '.gemini', 'antigravity-cli'), host: 'Antigravity CLI', kind: 'cli' }];
+  return (Array.isArray(v) ? v : [v]).map(h => typeof h === 'string' ? { dir: h, host: 'Antigravity CLI', kind: 'cli' } : h);
+}
 const humanize = s => String(s || '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 /** '2026-11-11 04:43:01.184119+00:00' (and the zero time '0001-01-01 ...') -> ms, or 0 */
 export function timeOf(v) {
@@ -138,8 +145,8 @@ async function sigOf(file) {
 async function copyOf(file, sig, now) {
   const hit = copies.get(file);
   if (hit && hit.sig === sig) { copies.touch(file, now); return hit.file; }
-  // one scratch folder per Antigravity home (the server reuses it across restarts; a test's fixture gets its own)
-  const root = path.join(os.tmpdir(), `ai-office-agy-${createHash('sha1').update(home()).digest('hex').slice(0, 10)}`);
+  // one scratch folder per source folder (the server reuses it across restarts; a test's fixture gets its own)
+  const root = path.join(os.tmpdir(), `ai-office-agy-${createHash('sha1').update(path.dirname(file)).digest('hex').slice(0, 10)}`);
   if (!madeRoots.has(root)) { await mkdir(root, { recursive: true }); madeRoots.add(root); }
   const dest = path.join(root, path.basename(file));
   await copyFile(file, dest);
@@ -155,15 +162,16 @@ async function query(file, sig, now, sql, params = []) {
   try { return db.prepare(sql).all(...params); } finally { db.close(); }
 }
 
-async function loadSummaries(now) {
-  const file = path.join(home(), 'conversation_summaries.db');
+async function loadSummaries(home, now) {
+  const file = path.join(home, 'conversation_summaries.db');
   let s; try { s = await sigOf(file); } catch { return new Map(); }
-  if (s.sig === summaries.sig) return summaries.rows;
+  const last = summaries.get(home) || { sig: '', rows: new Map() };
+  if (s.sig === last.sig) return last.rows;
   const rows = new Map();
   try {
     for (const r of await query(file, s.sig, now, 'select conversation_id, title, preview, workspace_uris, status, parent_conversation_id, agent_name, killed, not_fully_idle, last_modified_time from conversation_summaries')) rows.set(r.conversation_id, r);
-  } catch { return summaries.rows; } // caught mid-write: keep the last good read
-  summaries = { sig: s.sig, rows };
+  } catch { return last.rows; } // caught mid-write: keep the last good read
+  summaries.set(home, { sig: s.sig, rows });
   return rows;
 }
 
@@ -216,7 +224,13 @@ async function conversation(id, file, s, now) {
 export async function collectAntigravity(now) {
   const agents = [];
   prune(now);
-  const dir = path.join(home(), 'conversations');
+  for (const h of homes()) agents.push(...await collectHome(h, now));
+  return agents;
+}
+
+async function collectHome({ dir: home, host, kind }, now) {
+  const agents = [];
+  const dir = path.join(home, 'conversations');
   let names = [];
   try { names = (await readdir(dir)).filter(f => /^[0-9a-f-]{36}\.db$/.test(f)); } catch { return agents; }
   let rows = null;
@@ -224,7 +238,7 @@ export async function collectAntigravity(now) {
     const id = f.slice(0, -3), file = path.join(dir, f);
     let s; try { s = await sigOf(file); } catch { continue; }
     if (now - s.mtimeMs > ASKING_WINDOW_MS) continue;
-    rows ??= await loadSummaries(now);
+    rows ??= await loadSummaries(home, now);
     const row = rows.get(id) || {};
     if (Number(row.killed)) continue;
     const info = await conversation(id, file, s, now);
@@ -236,7 +250,7 @@ export async function collectAntigravity(now) {
     const lead = row.parent_conversation_id || null;
     const what = row.title || (row.preview ? snippet(row.preview, 60) : null) || info.firstUser;
     agents.push({
-      id: `gemini:agy-${id}`, vendor: 'gemini', kind: lead ? 'subagent' : 'cli', host: 'Antigravity CLI', nickname: row.agent_name || null,
+      id: `gemini:agy-${id}`, vendor: 'gemini', kind: lead ? 'subagent' : kind, host, nickname: row.agent_name || null,
       task: lead ? (what ? `Helper: ${snippet(what, 50)}` : 'Helper') : what || (cwd ? basename(cwd) : 'Antigravity session'),
       cwd, project: cwd ? basename(cwd) : 'Antigravity', model: null, branch: null,
       startedAt: s.bornMs || null, alive: true, status: working ? 'working' : 'idle', statusAt: activeAt, lastActivityAt: activeAt,

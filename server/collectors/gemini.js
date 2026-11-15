@@ -90,7 +90,11 @@ export function touchOf(call, at) {
   return null;
 }
 
-function extractConversation(messages) {
+/** the CLI's own opening message (date, OS, folder listing), recorded as a 'user' message: not a request */
+const isContext = m => m?.type === 'user' && /^\s*<session_context>/.test(textOf(m.content));
+
+function extractConversation(all) {
+  const messages = all.filter(m => !isContext(m));
   const info = { thought: null, lastAt: 0, model: null, openTool: null, asking: null, last: null, firstUser: null, touches: [] };
   for (const m of messages) if (m && m.type === 'user' && textOf(m.content).trim()) { info.firstUser = snippet(textOf(m.content), 60); break; }
   for (let i = messages.length - 1; i >= 0; i--) {

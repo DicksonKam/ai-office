@@ -34,7 +34,10 @@ export const CONFIG = {
   },
   gemini: {
     home: path.join(HOME, '.gemini'),                          // Gemini CLI: tmp/<project>/chats/session-*.jsonl
-    antigravity: path.join(HOME, '.gemini', 'antigravity-cli'), // Antigravity CLI (agy): conversation_summaries.db + conversations/<id>.db
+    antigravity: [ // Antigravity's store (conversation_summaries.db + conversations/<id>.db), in two places
+      { dir: path.join(HOME, '.gemini', 'antigravity-cli'), host: 'Antigravity CLI', kind: 'cli' }, // the `agy` CLI
+      { dir: path.join(HOME, '.gemini', 'antigravity'), host: 'Gemini app', kind: 'desktop' },        // the Gemini Mac app's agents
+    ],
   },
   codex: {
     home: path.join(HOME, '.codex'),
