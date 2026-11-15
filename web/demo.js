@@ -1,7 +1,7 @@
 // Demo mode (?demo): a scripted office with a team (lead, helpers, reviewer) and real-shaped events,
 // so the choreography can be watched without live sessions.
 // (Calls for help are not thoughts: a real spawn event carries them, with its own amber bubble.)
-const HOST = { claude: 'Claude Desktop', codex: 'Codex Desktop', cursor: 'Cursor', gemini: 'Gemini CLI' };
+const HOST = { claude: 'Claude Desktop', codex: 'Codex Desktop', cursor: 'Cursor', gemini: 'Gemini app' };
 const hostFor = vendor => HOST[vendor] || vendor;
 // the demo's sessions are short: a finished task after 30 s of work (live: 2 min, from the server's config)
 const DEMO_CONFIG = { finishedMinMs: 30000 };
@@ -16,7 +16,21 @@ const CODEX_THOUGHTS = [
 ];
 
 // Sample work going on outside the turn, so the demo shows every look a job can have. `idle`: their turn is over.
-const demoSchedules = () => { const h = new Date(); h.setMinutes(0, 0, 0); h.setHours(h.getHours() + 1); return [{ id: 'demo:s1', kind: 'schedule', label: 'Check the inbox', state: 'waiting', nextAt: h.getTime(), owner: 'codex:demo-m2', startedAt: null, endedAt: null, evidence: 'reported' }, { id: 'demo:s2', kind: 'schedule', label: 'Weekly backup', state: 'waiting', nextAt: h.getTime() + 2 * 864e5, owner: null, startedAt: null, endedAt: null, evidence: 'reported' }]; };
+// the next full hour on the office's clock, as a real time. A preview ?hour holds that clock still, so there it is
+// worked out once (or it would creep on with real time while the clock does not)
+let previewNext = null;
+const nextHourAt = () => {
+  let hh = NaN;
+  try { const q = new URLSearchParams(globalThis.location?.search || ''); if (q.has('hour') && !q.has('timelapse')) hh = Number(q.get('hour')); } catch { /* no page */ }
+  if (Number.isFinite(hh) && previewNext) return new Date(previewNext);
+  const real = Date.now(), shown = new Date(real);
+  if (Number.isFinite(hh)) shown.setHours(Math.floor(hh), Math.round((hh % 1) * 60), 0, 0);
+  const next = new Date(shown); next.setMinutes(0, 0, 0); next.setHours(next.getHours() + 1);
+  const at = real + (next - shown);
+  if (Number.isFinite(hh)) previewNext = at;
+  return new Date(at);
+};
+const demoSchedules = () => { const h = nextHourAt(); return [{ id: 'demo:s1', kind: 'schedule', label: 'Check the inbox', state: 'waiting', nextAt: h.getTime(), owner: 'codex:demo-m2', startedAt: null, endedAt: null, evidence: 'reported' }, { id: 'demo:s2', kind: 'schedule', label: 'Weekly backup', state: 'waiting', nextAt: h.getTime() + 2 * 864e5, owner: null, startedAt: null, endedAt: null, evidence: 'reported' }]; };
 const DEMO_JOBS = {
   'claude:demo-m1': { jobs: [['run', 'running', 'npm run build', 240]] },
   'claude:demo-m3': { idle: true, jobs: [['run', 'running', 'Long test suite', 600], ['run', 'running', 'Rendering the evening', 180]] },
@@ -146,7 +160,7 @@ export function startDemo(onSnapshot, { scene = null } = {}) {
     { at: 66, a: mk('claude:demo-lead3', 'claude', 'desktop', 'Check the wiki links', 'team-wiki', { role: 'lead' }) },
     { at: 78, a: mk('claude:demo-h5', 'claude', 'subagent', 'Helper: check broken links', 'team-wiki', { parentId: 'claude:demo-lead3', role: 'helper', depth: 1 }) },
     { at: 22, a: mk('cursor:demo-c1', 'cursor', 'desktop', 'Refactor the settings page', 'settings-ui') },
-    { at: 52, a: mk('gemini:demo-g2', 'gemini', 'cli', 'Summarise the lab notes', 'lab-notes') },
+    { at: 52, a: mk('gemini:demo-g2', 'gemini', 'desktop', 'Summarise the lab notes', 'lab-notes') },
   ];
   const life = { 'codex:demo-h1': [62, 80], 'codex:demo-g1': [60, 90], 'claude:demo-m1': [50, 130], 'claude:demo-h3': [100, 125], 'codex:demo-h2': [140, 160], 'codex:demo-h4': [130, 145], 'claude:demo-h5': [125, 150], 'claude:demo-m3': [150, 200],
     [B1]: [124, 150], [BW]: [168, 205], [B2]: [170, 215], 'claude:demo-m5': [158, 190] };

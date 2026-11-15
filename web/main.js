@@ -332,6 +332,8 @@ function clockNow() {
   return d;
 }
 officeClock.now = clockNow;
+// a preview hour holds the wall clock still: the gap between it and real time is fixed when the page opens
+const PREVIEW_FIXED = _q.has('hour') && !TIMELAPSE_S ? clockNow().getTime() - Date.now() : 0;
 let sitePlace; // from the server; until then, and in a demo, sun.js's own default
 function applyDaylight(force = false) {
   const now = clockNow(), key = String(Math.floor(now.getTime() / 3600)); // about every 3.6 s: small enough that nothing is seen to step
@@ -642,8 +644,10 @@ if (typeof ResizeObserver === 'function') {
     if (now !== was) { const first = was === null; was = now; if (!first) fitCamera(mgr.office, false); }
   }).observe(rosterEl);
 }
-const clockAt = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-const dayClock = (t, now) => { const d = new Date(t), n = new Date(now); return d.toDateString() === n.toDateString() ? clockAt(t) : `${d.toLocaleDateString([], { weekday: 'short' })} ${clockAt(t)}`; };
+// a preview hour (?hour, the time-lapse) moves the wall clock: times shown beside it move with it, so they agree
+const previewShift = () => (!_q.has('hour') || stage.film != null ? 0 : TIMELAPSE_S ? clockNow().getTime() - Date.now() : PREVIEW_FIXED);
+const clockAt = t => new Date(t + previewShift()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+const dayClock = (t, now) => { const sh = previewShift(), d = new Date(t + sh), n = new Date(now + sh); return d.toDateString() === n.toDateString() ? clockAt(t) : `${d.toLocaleDateString([], { weekday: 'short' })} ${clockAt(t)}`; };
 const SAID = { done: ['✓', 'finished'], failed: ['⚠', 'failed'], stopped: ['■', 'stopped'], unknown: ['?', 'no word on how it ended'] };
 /** what their status says while their turn is over but something they started is still going */
 function jobWaitWords(a, now) {
@@ -913,7 +917,7 @@ function logLine(kind, d) {
 function endName(ev, side, nm) { return ev.stub?.side === side ? ev.stub.label : nm(ev[side]); }
 function logAs(at, kind, d, render = true) { const l = logLine(kind, d); if (l) addLog(at, l[0], l[1], l[2] || '', render); }
 function renderLog() {
-  logBody.innerHTML = log.map(e => `<div class="entry ${e.cls}"><span class="t">${new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><span class="i">${e.icon}</span><span class="m">${e.html}</span></div>`).join('') || '<div class="entry"><span class="m">quiet so far</span></div>';
+  logBody.innerHTML = log.map(e => `<div class="entry ${e.cls}"><span class="t">${new Date(e.at + previewShift()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span><span class="i">${e.icon}</span><span class="m">${e.html}</span></div>`).join('') || '<div class="entry"><span class="m">quiet so far</span></div>';
 }
 let logPrimed = false;
 function logFromSnapshot(snap, before, diff = true) {

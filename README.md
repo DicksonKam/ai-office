@@ -3,7 +3,7 @@
 A cozy, fixed-camera 3D office where **every AI coding agent running on your machine is a chibi worker**, and agents
 that work together sit together as a team.
 
-![Workers walking into the office, sitting down at their desks and calling for help](docs/office.webp)
+![Workers walking in along the pavement and up the path, sitting down at their desks, briefing helpers and calling for help](docs/office.webp)
 
 Agents walk in through the door when a session starts, sit at a desk and type while they work, and show a brief
 bubble with what is in their head. Each helper a lead spawns walks in, gets briefed at the side of the lead's desk and
@@ -100,7 +100,9 @@ works well.
 
 **On screen:** the camera keeps its fixed angle and shows the whole floor; the **Auto-zoom** pill, or a double-click on
 the scene, makes it follow the people who are in; click a team in the **Teams** roster to look at that pod for a
-moment. While the roster runs down the right-hand side, the frame makes room for it. The **Log** pill opens the office log: arrivals, departures, delegations, messages, reports, verdicts and
+moment. While the Teams roster or the office log is open on the right, the office stays centred if they do not cover it,
+and otherwise moves left or down only as far as it takes to clear them; open together, the two stack without overlapping
+(Teams scrolls). The **Log** pill opens the office log: arrivals, departures, delegations, messages, reports, verdicts and
 finishes, newest first, real events only. In a busy spot, name tags declutter: people in front keep the full tag,
 the others shrink to name + role and stack upward on a thin leader (hover a tag for the full text); someone simply
 sitting and working yields first and shrinks to a coloured dot, so asks, errors and finished work keep their tags. The **Key** pill

@@ -13,7 +13,7 @@ const CAST = [
   ['codex:film-m4', 'codex', 'desktop', 'Configure the build cache', 'city-sim', 14.0, 17.3, { asks: [[15.2, 'Needs your OK to run a command']] }],
   ['claude:film-lead3', 'claude', 'desktop', 'Check the wiki links', 'team-wiki', 15.1, 18.2, { role: 'lead', helpers: [['claude:film-h5', 'Helper: check broken links', null, '14 broken links, all in the changelog folder.']] }],
   ['cursor:film-c1', 'cursor', 'desktop', 'Refactor the settings page', 'settings-ui', 16.0, 18.6, {}],
-  ['gemini:film-g2', 'gemini', 'cli', 'Summarise the lab notes', 'lab-notes', 17.0, 18.4, { asks: [[17.6, 'Needs your OK to run a command']] }],
+  ['gemini:film-g2', 'gemini', 'desktop', 'Summarise the lab notes', 'lab-notes', 17.0, 18.4, { asks: [[17.6, 'Needs your OK to run a command']] }],
 ];
 
 /** the made-up day, ending at `now`'s previous midnight */
