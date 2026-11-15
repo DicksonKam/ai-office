@@ -76,11 +76,36 @@ function placeNightLights() {
 
 let fullView = null, viewTarget = null, viewNow = null, mgrRef = null;
 const camInv = new THREE.Matrix4();
-function camBounds(points, padX = 0.6, padTop = 1.2, padBottom = 0.6) {
+/** the box to fit `points` into; `keep` are only kept out from under the Teams panel, not fitted (scenery at the edge) */
+function camBounds(points, padX = 0.6, padTop = 1.2, padBottom = 0.6, keep = []) {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const p = new THREE.Vector3();
-  for (const [x, y, z] of points) { p.set(x, y, z).applyMatrix4(camInv); minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
-  return { minX: minX - padX, maxX: maxX + padX, minY: minY - padBottom, maxY: maxY + padTop };
+  const flat = [];
+  for (const [x, y, z] of points) { p.set(x, y, z).applyMatrix4(camInv); flat.push([p.x, p.y]); minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+  for (const [x, y, z] of keep) { p.set(x, y, z).applyMatrix4(camInv); flat.push([p.x, p.y]); }
+  return { minX: minX - padX, maxX: maxX + padX, minY: minY - padBottom, maxY: maxY + padTop, hull: hullOf(flat) };
+}
+/** convex hull of 2D points, counter-clockwise (monotone chain) */
+function hullOf(pts) {
+  const q = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (q.length < 3) return q;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const p of q) { while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of q.reverse()) { while (hi.length > 1 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+/** does a convex polygon (screen px) overlap a rectangle [x0, y0, x1, y1]? separating axes */
+function hullHitsRect(poly, [x0, y0, x1, y1]) {
+  if (poly.length < 3) return poly.some(([x, y]) => x > x0 && x < x1 && y > y0 && y < y1);
+  const rect = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  const apart = (ax, ay) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity;
+    for (const [x, y] of poly) { const v = x * ax + y * ay; a = Math.min(a, v); b = Math.max(b, v); }
+    for (const [x, y] of rect) { const v = x * ax + y * ay; c = Math.min(c, v); d = Math.max(d, v); }
+    return b < c || d < a; };
+  if (apart(1, 0) || apart(0, 1)) return false;
+  for (let i = 0; i < poly.length; i++) { const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length]; if (apart(ay - by, bx - ax)) return false; }
+  return true;
 }
 function toFrustum(b) {
   const W = window.innerWidth, H = window.innerHeight;
@@ -88,14 +113,33 @@ function toFrustum(b) {
   const cssPx = name => parseFloat(document.documentElement.style.getPropertyValue(name)) || 0;
   const hud = W / H < 0.8 ? Math.min(H * 0.4, cssPx('--hud-h')) : 0;
   const tl = Math.min(H * 0.45, cssPx('--tl-h')); // the Today drawer covers the bottom while open: fit above it
-  // the Teams panel covers the right-hand column while open on a wide screen: fit the office into what is left of it
+  /** the frame with `side` px kept clear on the right and `top` px at the top */
+  const frame = (side, top = 0) => {
+    const up = hud + top, free = Math.max(H * 0.4, H - up - tl), freeW = W - side, aspect = freeW / free;
+    let w = b.maxX - b.minX, h = b.maxY - b.minY;
+    if (w / h > aspect) h = w / aspect; else w = h * aspect;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2, above = h * up / free, below = h * tl / free, beside = w * side / freeW;
+    return { left: cx - w / 2, right: cx + w / 2 + beside, top: cy + h / 2 + above, bottom: cy - h / 2 - below };
+  };
+  // the Teams panel sits in the top right while open on a wide screen: centred when the office clears it, otherwise moved
+  // left and/or down only as far as it takes (the panel is often short, and an isometric office leaves that corner empty)
   const rp = document.getElementById('roster'), rr = rp?.classList.contains('on') && W / H >= 0.8 ? rp.getBoundingClientRect() : null;
-  const side = rr && rr.height > H * 0.4 ? Math.min(W * 0.35, Math.max(0, W - rr.left + 8)) : 0;
-  const free = Math.max(H * 0.4, H - hud - tl), freeW = W - side, aspect = freeW / free;
-  let w = b.maxX - b.minX, h = b.maxY - b.minY;
-  if (w / h > aspect) h = w / aspect; else w = h * aspect;
-  const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2, above = h * hud / free, below = h * tl / free, beside = w * side / freeW;
-  return { left: cx - w / 2, right: cx + w / 2 + beside, top: cy + h / 2 + above, bottom: cy - h / 2 - below };
+  if (!rr || !b.hull || rr.width < 1) return frame(0);
+  const box = [rr.left - 12, rr.top - 12, rr.right + 12, rr.bottom + 12];
+  const hits = f => hullHitsRect(b.hull.map(([x, y]) => [(x - f.left) / (f.right - f.left) * W, (f.top - y) / (f.top - f.bottom) * H]), box);
+  if (!hits(frame(0))) return frame(0);
+  // a little of both is often best: for each way down, the least way aside; keep the biggest office (then the least moved)
+  const most = Math.min(W * 0.35, Math.max(0, W - rr.left + 8)), deepest = Math.max(0, Math.min(H * 0.45, rr.bottom - hud));
+  let best = null;
+  for (let k = 0; k <= 8; k++) {
+    const top = deepest * k / 8;
+    if (hits(frame(most, top))) continue;
+    let lo = 0, hi = most;
+    for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (hits(frame(mid, top))) lo = mid; else hi = mid; }
+    const f = frame(hi, top), scale = 1 / (f.right - f.left), moved = hi / W + top / H;
+    if (!best || scale > best.scale * 1.01 || (scale > best.scale * 0.99 && moved < best.moved)) best = { f, scale, moved };
+  }
+  return best ? best.f : frame(most);
 }
 function fitCamera(office, immediate = true) {
   const by = office.baseY || 0;
@@ -106,7 +150,10 @@ function fitCamera(office, immediate = true) {
   const pts = [];
   // the west bound reaches the arrival: porch, path, bench and sign
   for (const x of [-office.hx - 5.0, office.hx + 0.3]) for (const y of [by - 0.3, by + 3.4]) for (const z of [-office.hz - 0.3, office.hz + 0.3]) pts.push([x, y, z]);
-  fullView = toFrustum(camBounds(pts, 0.6, 1.8, 1.2));
+  // the staff terrace behind the building (web/site.js): not framed for, but not hidden under the Teams panel either
+  const fx = office.fireExit?.door?.x ?? office.hx - 0.8, keep = [];
+  for (const x of [fx - 5.25, fx + 0.6]) for (const z of [-office.hz - 3.4, -office.hz - 7.0]) keep.push([x, 0, z], [x, 2.4, z]);
+  fullView = toFrustum(camBounds(pts, 0.6, 1.8, 1.2, keep));
   if (!viewNow) { viewNow = { ...fullView }; applyFrustum(viewNow); }
   placeLights(office);
   retarget(immediate);
@@ -568,12 +615,12 @@ const rosterEl = $('roster');
 // toggling the panel refits the camera: the frame makes room for it, or takes the space back
 $('rosterToggle').addEventListener('click', () => { rosterEl.classList.toggle('on'); setPressed($('rosterToggle'), rosterEl.classList.contains('on')); fitCamera(mgr.office, false); try { localStorage.setItem('ai-office-roster', rosterEl.classList.contains('on') ? '1' : '0'); } catch { /* ignore */ } });
 try { if (localStorage.getItem('ai-office-roster') !== '0' && window.innerWidth > 1000) { rosterEl.classList.add('on'); setPressed($('rosterToggle'), true); } } catch { /* ignore */ }
-// the panel grows as teams arrive: once it covers the column (or stops covering it), the frame eases to make room
+// the panel grows as teams arrive: the frame eases aside as far as it now needs (or back once it shrinks)
 if (typeof ResizeObserver === 'function') {
-  let covers = null;
+  let was = null;
   new ResizeObserver(() => {
-    const now = rosterEl.classList.contains('on') && rosterEl.getBoundingClientRect().height > window.innerHeight * 0.4;
-    if (now !== covers) { const first = covers === null; covers = now; if (!first) fitCamera(mgr.office, false); }
+    const now = rosterEl.classList.contains('on') ? Math.round(rosterEl.getBoundingClientRect().height / 8) : -1;
+    if (now !== was) { const first = was === null; was = now; if (!first) fitCamera(mgr.office, false); }
   }).observe(rosterEl);
 }
 const clockAt = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
